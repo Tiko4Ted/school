@@ -5,6 +5,11 @@ import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { z } from "zod";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button, PrimaryButton } from "@/components/ui/button";
 
 type StudentStatus = "ACTIVE" | "PROMOTED" | "GRADUATED" | "TRANSFERRED";
 type Gender = "MALE" | "FEMALE";
@@ -335,6 +340,11 @@ export function StudentsManager() {
     setBulkPreview(null);
     setBulkRows([]);
     setBulkFileName(null);
+    
+    // Reset file input
+    const fileInput = document.getElementById("bulk-file") as HTMLInputElement;
+    if (fileInput) fileInput.value = "";
+
     await loadStudents();
     setIsCommitting(false);
   }
@@ -346,447 +356,433 @@ export function StudentsManager() {
 
     const previewSlice = bulkRows.slice(0, 10);
     return (
-      <div className="rounded-2xl border border-slate-200">
-        <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-600">
-          Local preview (showing {previewSlice.length} of {bulkRows.length} rows)
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="px-3 py-2 text-left text-slate-600">Admission #</th>
-                <th className="px-3 py-2 text-left text-slate-600">Name</th>
-                <th className="px-3 py-2 text-left text-slate-600">Gender</th>
-                <th className="px-3 py-2 text-left text-slate-600">DOB</th>
-                <th className="px-3 py-2 text-left text-slate-600">Class</th>
-                <th className="px-3 py-2 text-left text-slate-600">Stream</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 bg-white">
+      <Card>
+        <CardHeader className="py-4">
+          <CardTitle className="text-sm">Local Preview (showing {previewSlice.length} of {bulkRows.length} rows)</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Admission #</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Gender</TableHead>
+                <TableHead>DOB</TableHead>
+                <TableHead>Class</TableHead>
+                <TableHead>Stream</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {previewSlice.map((row) => (
-                <tr key={`${row.admissionNumber}-${row.classId}`}>
-                  <td className="px-3 py-2 text-slate-900">{row.admissionNumber}</td>
-                  <td className="px-3 py-2 text-slate-700">
+                <TableRow key={`${row.admissionNumber}-${row.classId}`}>
+                  <TableCell className="font-medium text-text-primary">{row.admissionNumber}</TableCell>
+                  <TableCell>
                     {row.firstName} {row.lastName}
-                  </td>
-                  <td className="px-3 py-2 text-slate-700">{row.gender}</td>
-                  <td className="px-3 py-2 text-slate-700">{row.dateOfBirth}</td>
-                  <td className="px-3 py-2 text-slate-700">{row.classId}</td>
-                  <td className="px-3 py-2 text-slate-700">{row.streamId ?? "auto"}</td>
-                </tr>
+                  </TableCell>
+                  <TableCell>{row.gender}</TableCell>
+                  <TableCell>{row.dateOfBirth}</TableCell>
+                  <TableCell>{row.classId}</TableCell>
+                  <TableCell>{row.streamId ?? "auto"}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#eef2ff_0%,#f8fafc_42%,#ffffff_100%)] px-6 py-10 text-slate-900">
-      <section className="mx-auto max-w-6xl space-y-8">
-        <Card className="border-slate-200 bg-white/95">
-          <CardHeader className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-indigo-600">Students</p>
-              <CardTitle className="text-3xl">Directory and enrollment</CardTitle>
-              <CardDescription className="text-base">
-                Manage admission data, keep class placements accurate, and control student lifecycle actions.
-              </CardDescription>
-            </div>
-            <div className="flex flex-col gap-2 text-sm text-slate-600 md:items-end">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={includeInactive}
-                  onChange={(event) => setIncludeInactive(event.target.checked)}
-                />
-                Include promoted/inactive
-              </label>
-              <button
-                type="button"
-                onClick={() => void loadStudents()}
-                className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 transition hover:bg-slate-50"
-              >
-                Refresh list
-              </button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {isLoadingStudents ? <p className="text-sm text-slate-600">Loading students...</p> : null}
-            {studentsError ? <p className="text-sm text-rose-600">{studentsError}</p> : null}
-            {!isLoadingStudents && !studentsError ? (
-              <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                <table className="min-w-full divide-y divide-slate-200 text-sm">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Admission</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Name</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Gender</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">DOB</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Class / Stream</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Status</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 bg-white">
-                    {students.map((student) => (
-                      <tr key={student.id}>
-                        <td className="px-4 py-3 font-semibold text-slate-900">{student.admissionNumber}</td>
-                        <td className="px-4 py-3 text-slate-900">
-                          {student.firstName} {student.lastName}
-                        </td>
-                        <td className="px-4 py-3 text-slate-700">{student.gender === "MALE" ? "Male" : "Female"}</td>
-                        <td className="px-4 py-3 text-slate-700">{formatDateForInput(student.dateOfBirth)}</td>
-                        <td className="px-4 py-3 text-slate-700">
-                          {student.currentClass.name} · {student.currentStream.name}
-                        </td>
-                        <td className="px-4 py-3 text-slate-700">{student.status}</td>
-                        <td className="px-4 py-3">
-                          <button
-                            type="button"
-                            onClick={() => handleEditStudent(student)}
-                            className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-900 transition hover:bg-slate-50"
-                          >
-                            Edit
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {students.length === 0 ? (
-                      <tr>
-                        <td className="px-4 py-6 text-slate-600" colSpan={7}>
-                          No students found.
-                        </td>
-                      </tr>
-                    ) : null}
-                  </tbody>
-                </table>
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
+    <div className="space-y-8">
+      {/* Directory Section */}
+      <Card>
+        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-1">
+            <CardTitle>Students Directory</CardTitle>
+            <CardDescription>
+              Manage admission data, keep class placements accurate, and control student lifecycle actions.
+            </CardDescription>
+          </div>
+          <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={includeInactive}
+                onChange={(event) => setIncludeInactive(event.target.checked)}
+                className="h-4 w-4 rounded border-border-subtle text-primary focus:ring-primary"
+              />
+              <span className="text-sm font-medium text-text-secondary">Include inactive</span>
+            </label>
+            <Button variant="outline" onClick={() => void loadStudents()}>
+              Refresh List
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {isLoadingStudents ? (
+            <p className="py-12 text-center text-sm text-text-secondary animate-pulse">Loading students...</p>
+          ) : studentsError ? (
+            <p className="py-12 text-center text-sm font-medium text-error">{studentsError}</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Admission</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Gender & DOB</TableHead>
+                  <TableHead>Placement</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {students.map((student) => (
+                  <TableRow key={student.id}>
+                    <TableCell className="font-bold text-text-primary">{student.admissionNumber}</TableCell>
+                    <TableCell className="font-medium text-text-primary">
+                      {student.firstName} {student.lastName}
+                    </TableCell>
+                    <TableCell>
+                      <p className="text-text-primary">{student.gender === "MALE" ? "Male" : "Female"}</p>
+                      <p className="text-xs text-text-secondary mt-0.5">{formatDateForInput(student.dateOfBirth)}</p>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-text-primary">{student.currentClass.name}</span>
+                        <span className="h-4 w-px bg-border-subtle" />
+                        <span className="text-text-secondary">{student.currentStream.name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        student.status === 'ACTIVE' ? 'bg-success/10 text-success' :
+                        student.status === 'PROMOTED' ? 'bg-primary/10 text-primary' :
+                        'bg-background text-text-secondary border border-border-subtle'
+                      }`}>
+                        {student.status}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="outline" size="sm" onClick={() => handleEditStudent(student)}>
+                        Edit
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {students.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="py-12 text-center text-text-secondary italic">
+                      No students found.
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card className="border-slate-200 bg-white/95">
+      {/* Forms Section */}
+      <div className="grid gap-8 lg:grid-cols-12">
+        
+        {/* Individual Form */}
+        <div className="lg:col-span-7">
+          <Card>
             <CardHeader>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-indigo-600">
-                {formMode === "create" ? "Add student" : "Edit student"}
-              </p>
-              <CardTitle>{formMode === "create" ? "New admission" : "Update student details"}</CardTitle>
-              <CardDescription className="text-base">
-                Capture official biodata, assign class + stream, and keep lifecycle transitions consistent.
+              <CardTitle>{formMode === "create" ? "New Admission" : "Update Student Details"}</CardTitle>
+              <CardDescription>
+                Capture official biodata, assign class and stream placements.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form className="space-y-5" onSubmit={handleStudentSubmit}>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700" htmlFor="student-admissionNumber">
-                    Admission number
-                  </label>
-                  <input
-                    id="student-admissionNumber"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-indigo-500"
-                    value={studentValues.admissionNumber}
-                    onChange={(event) =>
-                      setStudentValues((current) => ({ ...current, admissionNumber: event.target.value }))
-                    }
-                  />
-                  {studentFieldErrors.admissionNumber ? (
-                    <p className="text-sm text-rose-600">{studentFieldErrors.admissionNumber}</p>
-                  ) : null}
+              <form className="space-y-8" onSubmit={handleStudentSubmit}>
+                
+                <div className="space-y-6">
+                  <div className="border-b border-border-subtle pb-2">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-text-secondary">Personal Information</h3>
+                  </div>
+                  
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <FormField label="First Name" error={studentFieldErrors.firstName}>
+                      <Input
+                        id="student-firstName"
+                        value={studentValues.firstName}
+                        onChange={(event) =>
+                          setStudentValues((current) => ({ ...current, firstName: event.target.value }))
+                        }
+                        placeholder="e.g., John"
+                      />
+                    </FormField>
+
+                    <FormField label="Last Name" error={studentFieldErrors.lastName}>
+                      <Input
+                        id="student-lastName"
+                        value={studentValues.lastName}
+                        onChange={(event) =>
+                          setStudentValues((current) => ({ ...current, lastName: event.target.value }))
+                        }
+                        placeholder="e.g., Doe"
+                      />
+                    </FormField>
+                  </div>
+
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <FormField label="Gender" error={studentFieldErrors.gender}>
+                      <Select
+                        id="student-gender"
+                        value={studentValues.gender}
+                        onChange={(event) =>
+                          setStudentValues((current) => ({
+                            ...current,
+                            gender: event.target.value as Gender,
+                          }))
+                        }
+                      >
+                        <option value="">Select gender</option>
+                        {genderOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </FormField>
+
+                    <FormField label="Date of Birth" error={studentFieldErrors.dateOfBirth}>
+                      <Input
+                        id="student-dob"
+                        type="date"
+                        value={studentValues.dateOfBirth}
+                        onChange={(event) =>
+                          setStudentValues((current) => ({ ...current, dateOfBirth: event.target.value }))
+                        }
+                      />
+                    </FormField>
+                  </div>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700" htmlFor="student-firstName">
-                      First name
-                    </label>
-                    <input
-                      id="student-firstName"
-                      className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-indigo-500"
-                      value={studentValues.firstName}
+                <div className="space-y-6">
+                  <div className="border-b border-border-subtle pb-2">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-text-secondary">Academic Placement</h3>
+                  </div>
+
+                  <FormField label="Admission Number" error={studentFieldErrors.admissionNumber}>
+                    <Input
+                      id="student-admissionNumber"
+                      value={studentValues.admissionNumber}
                       onChange={(event) =>
-                        setStudentValues((current) => ({ ...current, firstName: event.target.value }))
+                        setStudentValues((current) => ({ ...current, admissionNumber: event.target.value }))
                       }
+                      placeholder="e.g., SCH-2024-001"
                     />
-                    {studentFieldErrors.firstName ? (
-                      <p className="text-sm text-rose-600">{studentFieldErrors.firstName}</p>
-                    ) : null}
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700" htmlFor="student-lastName">
-                      Last name
-                    </label>
-                    <input
-                      id="student-lastName"
-                      className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-indigo-500"
-                      value={studentValues.lastName}
-                      onChange={(event) =>
-                        setStudentValues((current) => ({ ...current, lastName: event.target.value }))
-                      }
-                    />
-                    {studentFieldErrors.lastName ? (
-                      <p className="text-sm text-rose-600">{studentFieldErrors.lastName}</p>
-                    ) : null}
-                  </div>
-                </div>
+                  </FormField>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700" htmlFor="student-gender">
-                      Gender
-                    </label>
-                    <select
-                      id="student-gender"
-                      className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-indigo-500"
-                      value={studentValues.gender}
-                      onChange={(event) =>
-                        setStudentValues((current) => ({
-                          ...current,
-                          gender: event.target.value as Gender,
-                        }))
-                      }
-                    >
-                      <option value="">Select gender</option>
-                      {genderOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    {studentFieldErrors.gender ? (
-                      <p className="text-sm text-rose-600">{studentFieldErrors.gender}</p>
-                    ) : null}
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700" htmlFor="student-dob">
-                      Date of birth
-                    </label>
-                    <input
-                      id="student-dob"
-                      type="date"
-                      className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-indigo-500"
-                      value={studentValues.dateOfBirth}
-                      onChange={(event) =>
-                        setStudentValues((current) => ({ ...current, dateOfBirth: event.target.value }))
-                      }
-                    />
-                    {studentFieldErrors.dateOfBirth ? (
-                      <p className="text-sm text-rose-600">{studentFieldErrors.dateOfBirth}</p>
-                    ) : null}
-                  </div>
-                </div>
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <FormField label="Class" error={studentFieldErrors.currentClassId}>
+                      <Select
+                        id="student-class"
+                        value={studentValues.currentClassId}
+                        onChange={(event) =>
+                          setStudentValues((current) => ({
+                            ...current,
+                            currentClassId: event.target.value,
+                            currentStreamId: "",
+                          }))
+                        }
+                      >
+                        <option value="">Select class</option>
+                        {classes
+                          .slice()
+                          .sort((a, b) => a.level - b.level)
+                          .map((cls) => (
+                            <option key={cls.id} value={cls.id}>
+                              {cls.name}
+                            </option>
+                          ))}
+                      </Select>
+                    </FormField>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700" htmlFor="student-class">
-                    Class
-                  </label>
-                  <select
-                    id="student-class"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-indigo-500"
-                    value={studentValues.currentClassId}
-                    onChange={(event) =>
-                      setStudentValues((current) => ({
-                        ...current,
-                        currentClassId: event.target.value,
-                        currentStreamId: "",
-                      }))
-                    }
-                  >
-                    <option value="">Select class</option>
-                    {classes
-                      .slice()
-                      .sort((a, b) => a.level - b.level)
-                      .map((cls) => (
-                        <option key={cls.id} value={cls.id}>
-                          {cls.name}
-                        </option>
-                      ))}
-                  </select>
-                  {studentFieldErrors.currentClassId ? (
-                    <p className="text-sm text-rose-600">{studentFieldErrors.currentClassId}</p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700" htmlFor="student-stream">
-                    Stream
-                  </label>
-                  <select
-                    id="student-stream"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-indigo-500"
-                    value={studentValues.currentStreamId}
-                    onChange={(event) =>
-                      setStudentValues((current) => ({ ...current, currentStreamId: event.target.value }))
-                    }
-                    disabled={!availableStreams.length}
-                  >
-                    <option value="">Select stream</option>
-                    {availableStreams.map((stream) => (
-                      <option key={stream.id} value={stream.id}>
-                        {stream.name}
-                      </option>
-                    ))}
-                  </select>
-                  {studentFieldErrors.currentStreamId ? (
-                    <p className="text-sm text-rose-600">{studentFieldErrors.currentStreamId}</p>
-                  ) : null}
+                    <FormField label="Stream" error={studentFieldErrors.currentStreamId}>
+                      <Select
+                        id="student-stream"
+                        value={studentValues.currentStreamId}
+                        onChange={(event) =>
+                          setStudentValues((current) => ({ ...current, currentStreamId: event.target.value }))
+                        }
+                        disabled={!availableStreams.length}
+                      >
+                        <option value="">Select stream</option>
+                        {availableStreams.map((stream) => (
+                          <option key={stream.id} value={stream.id}>
+                            {stream.name}
+                          </option>
+                        ))}
+                      </Select>
+                    </FormField>
+                  </div>
                 </div>
 
                 {studentFormError ? (
-                  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                  <div className="rounded-xl border border-error/20 bg-error/5 p-4 text-sm font-medium text-error">
                     {studentFormError}
                   </div>
                 ) : null}
 
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="submit"
-                    disabled={isSubmittingStudent}
-                    className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {isSubmittingStudent
-                      ? "Saving..."
-                      : formMode === "create"
-                        ? "Add student"
-                        : "Save changes"}
-                  </button>
+                <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <PrimaryButton type="submit" disabled={isSubmittingStudent}>
+                    {isSubmittingStudent ? "Saving..." : formMode === "create" ? "Add Student" : "Save Changes"}
+                  </PrimaryButton>
                   {formMode === "edit" ? (
-                    <button
-                      type="button"
-                      onClick={resetStudentForm}
-                      className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900 transition hover:bg-slate-50"
-                    >
-                      Cancel edit
-                    </button>
+                    <Button type="button" variant="outline" onClick={resetStudentForm}>
+                      Cancel
+                    </Button>
                   ) : null}
                 </div>
               </form>
             </CardContent>
           </Card>
+        </div>
 
-          <Card className="border-slate-200 bg-white/95">
+        {/* Bulk Upload Form */}
+        <div className="lg:col-span-5">
+          <Card>
             <CardHeader>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-indigo-600">Bulk upload</p>
-              <CardTitle>CSV/XLSX import</CardTitle>
-              <CardDescription className="text-base">
-                Upload admissions from Excel or CSV, preview validation issues, and commit clean rows without touching
-                the database manually.
+              <CardTitle>Bulk Upload</CardTitle>
+              <CardDescription>
+                Upload admissions from Excel or CSV, validate, and commit.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700" htmlFor="bulk-file">
-                  File (CSV or XLSX with headers: admissionNumber, firstName, lastName, gender, dateOfBirth, classId,
-                  streamId?)
-                </label>
-                <input
-                  id="bulk-file"
-                  type="file"
-                  accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
-                  onChange={handleBulkFileChange}
-                />
-                {bulkFileName ? (
-                  <p className="text-xs text-slate-500">Loaded file: {bulkFileName}</p>
-                ) : (
-                  <p className="text-xs text-slate-500">
-                    Provide classId/streamId values from setup exports to avoid mismatches.
-                  </p>
+            <CardContent className="space-y-6">
+              
+              <div className="space-y-4">
+                <div className="relative group rounded-2xl border-2 border-dashed border-border-subtle bg-background/50 p-8 text-center transition hover:border-primary/40 hover:bg-primary-light/5">
+                  <label htmlFor="bulk-file" className="cursor-pointer flex flex-col items-center">
+                    <div className="mb-4 rounded-full bg-primary-light/20 p-4 text-primary group-hover:scale-110 transition-transform">
+                      <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                    </div>
+                    <p className="text-sm font-bold text-text-primary">Click to upload CSV or XLSX</p>
+                    <p className="mt-1 text-xs text-text-secondary leading-relaxed">
+                      Required: admissionNumber, firstName, lastName, gender, dateOfBirth, classId
+                    </p>
+                  </label>
+                  <input
+                    id="bulk-file"
+                    type="file"
+                    className="hidden"
+                    accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                    onChange={handleBulkFileChange}
+                  />
+                </div>
+
+                {bulkFileName && (
+                  <div className="flex items-center justify-between rounded-xl border border-border-subtle bg-white p-4 shadow-soft">
+                    <div className="flex items-center space-x-3 overflow-hidden">
+                      <svg className="h-5 w-5 text-primary/60 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <span className="text-sm font-semibold text-text-primary truncate">{bulkFileName}</span>
+                    </div>
+                    <span className="shrink-0 rounded-lg bg-primary-light/20 px-2.5 py-1 text-xs font-bold text-primary">
+                      {bulkRows.length} rows
+                    </span>
+                  </div>
                 )}
               </div>
 
               {renderBulkPreviewTable()}
 
               {bulkError ? (
-                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                <div className="rounded-xl border border-error/20 bg-error/5 p-4 text-sm font-medium text-error">
                   {bulkError}
                 </div>
               ) : null}
 
               {bulkSuccess ? (
-                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                <div className="rounded-xl border border-success/20 bg-success/5 p-4 text-sm font-medium text-success">
                   {bulkSuccess}
                 </div>
               ) : null}
 
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={() => void handleBulkPreview()}
-                  disabled={!bulkRows.length || isPreviewing}
-                  className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {isPreviewing ? "Validating..." : "Preview & validate"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleBulkCommit()}
-                  disabled={!bulkRows.length || isCommitting}
-                  className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {isCommitting ? "Submitting..." : "Commit rows"}
-                </button>
-              </div>
-
-
               {bulkPreview ? (
-                <div className="space-y-3">
-                  <p className="text-sm text-slate-600">
-                    Validation result:{" "}
-                    <span className={bulkPreview.valid ? "text-emerald-600" : "text-rose-600"}>
-                      {bulkPreview.valid ? "All rows valid" : "Issues detected"}
-                    </span>
-                  </p>
-                  <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                    <table className="min-w-full divide-y divide-slate-200 text-sm">
-                      <thead className="bg-slate-50">
-                        <tr>
-                          <th className="px-3 py-2 text-left text-slate-600">Row</th>
-                          <th className="px-3 py-2 text-left text-slate-600">Admission</th>
-                          <th className="px-3 py-2 text-left text-slate-600">Class ID</th>
-                          <th className="px-3 py-2 text-left text-slate-600">Stream ID</th>
-                          <th className="px-3 py-2 text-left text-slate-600">Existing?</th>
-                          <th className="px-3 py-2 text-left text-slate-600">Issues</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200 bg-white">
-                        {bulkPreview.rows.map((row) => (
-                          <tr key={row.index}>
-                            <td className="px-3 py-2 text-slate-700">{row.index + 1}</td>
-                            <td className="px-3 py-2 text-slate-700">{row.admissionNumber}</td>
-                            <td className="px-3 py-2 text-slate-700">{row.classId}</td>
-                            <td className="px-3 py-2 text-slate-700">{row.streamId ?? "auto"}</td>
-                            <td className="px-3 py-2 text-slate-700">{row.exists ? "Yes" : "No"}</td>
-                            <td className="px-3 py-2 text-slate-700">
-                              {row.issues.length ? (
-                                <ul className="list-disc pl-4">
-                                  {row.issues.map((issue) => (
-                                    <li key={issue}>{issue}</li>
-                                  ))}
-                                </ul>
-                              ) : (
-                                <span className="text-emerald-600">OK</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                <div className="space-y-4">
+                  <div className={`flex items-center gap-3 rounded-xl border p-4 text-sm font-bold ${bulkPreview.valid ? "bg-success/5 text-success border-success/20" : "bg-error/5 text-error border-error/20"}`}>
+                    {bulkPreview.valid ? (
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+                    ) : (
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                    )}
+                    {bulkPreview.valid ? "Validation successful. Ready to commit." : "Issues detected in some rows."}
                   </div>
+
+                  {!bulkPreview.valid && (
+                    <Card>
+                      <CardContent className="p-0">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-16">Row</TableHead>
+                              <TableHead>Admission</TableHead>
+                              <TableHead>Status</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {bulkPreview.rows.map((row) => (
+                              <TableRow key={row.index}>
+                                <TableCell className="text-text-secondary font-mono">{row.index + 1}</TableCell>
+                                <TableCell className="font-medium text-text-primary">{row.admissionNumber}</TableCell>
+                                <TableCell>
+                                  {row.issues.length ? (
+                                    <ul className="list-disc pl-4 text-xs font-medium text-error">
+                                      {row.issues.map((issue) => (
+                                        <li key={issue}>{issue}</li>
+                                      ))}
+                                    </ul>
+                                  ) : (
+                                    <span className="text-xs font-bold text-success">Valid</span>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
               ) : null}
+
+              <div className="flex flex-wrap gap-3 pt-4 border-t border-border-subtle">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void handleBulkPreview()}
+                  disabled={!bulkRows.length || isPreviewing}
+                  className="flex-1"
+                >
+                  {isPreviewing ? "Validating..." : "Preview & Validate"}
+                </Button>
+                <PrimaryButton
+                  type="button"
+                  onClick={() => void handleBulkCommit()}
+                  disabled={Boolean(!bulkRows.length || isCommitting || (bulkPreview && !bulkPreview.valid))}
+                  className="flex-1"
+                >
+                  {isCommitting ? "Committing..." : "Commit Upload"}
+                </PrimaryButton>
+              </div>
+
             </CardContent>
           </Card>
         </div>
+      </div>
 
-        {setupError ? (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            {setupError}
-          </div>
-        ) : null}
-      </section>
-    </main>
+      {setupError ? (
+        <div className="rounded-xl border border-warning/20 bg-warning/5 p-4 text-sm font-medium text-warning-dark">
+          {setupError}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

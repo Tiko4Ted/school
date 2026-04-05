@@ -4,6 +4,12 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import Papa from "papaparse";
 import { submitBulkMarks, submitSingleMark } from "@/app/teacher/marks/actions";
 import { z } from "zod";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { PrimaryButton, Button } from "@/components/ui/button";
 
 type Assignment = {
   id: string;
@@ -180,7 +186,7 @@ export function TeacherMarksEntry() {
       : null;
 
   const singleValidation = singlePayload ? singleEntrySchema.safeParse(singlePayload) : null;
-  const singleSubmitDisabled = reviewLocked || isSinglePending || !singleValidation?.success;
+  const singleSubmitDisabled = Boolean(reviewLocked || isSinglePending || !singleValidation?.success);
   const singleValidationError =
     singleValidation && !singleValidation.success
       ? singleValidation.error.flatten().formErrors[0] ?? "Provide a valid student and score between 0 and 100."
@@ -297,33 +303,31 @@ export function TeacherMarksEntry() {
       setBulkError(null);
       setBulkRows([]);
       setBulkFileName(null);
+      
+      const fileInput = document.getElementById("bulk-file") as HTMLInputElement;
+      if (fileInput) fileInput.value = "";
+      
       await loadStudents(selectedExamId, selectedAssignment.stream.id, selectedAssignment.subject.id);
     });
   }
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#f0f9ff_0%,#f8fafc_42%,#ffffff_100%)] px-6 py-10 text-slate-900">
-      <section className="mx-auto max-w-5xl space-y-8">
-        <div className="rounded-3xl border border-slate-200 bg-white/95 p-6 shadow-sm">
-          <header className="mb-5 space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-600">Marks workflow</p>
-            <h1 className="text-3xl font-semibold">Teacher mark entry</h1>
-            <p className="text-slate-600">
-              Choose a stream + subject assignment and only exams configured for that combination will be available.
-            </p>
-          </header>
+    <div className="space-y-8">
+      <Card>
+        <CardHeader>
+          <CardTitle>Teacher Mark Entry</CardTitle>
+          <CardDescription>
+            Choose a stream + subject assignment to enter marks for configured exams.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {optionsLoading ? <p className="text-sm text-text-secondary">Loading assignments...</p> : null}
+          {optionsError ? <p className="text-sm font-medium text-error">{optionsError}</p> : null}
 
-          {optionsLoading ? <p className="text-sm text-slate-600">Loading assignments...</p> : null}
-          {optionsError ? <p className="text-sm text-rose-600">{optionsError}</p> : null}
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700" htmlFor="assignment-select">
-                Stream + subject
-              </label>
-              <select
+          <div className="grid gap-6 md:grid-cols-2">
+            <FormField label="Stream + Subject" id="assignment-select">
+              <Select
                 id="assignment-select"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-cyan-500"
                 value={selectedAssignmentId}
                 onChange={(event) => {
                   setSelectedAssignmentId(event.target.value);
@@ -338,15 +342,12 @@ export function TeacherMarksEntry() {
                     {assignment.stream.class.name} {assignment.stream.name} · {assignment.subject.name} ({assignment.subject.code})
                   </option>
                 ))}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700" htmlFor="exam-select">
-                Exam
-              </label>
-              <select
+              </Select>
+            </FormField>
+            
+            <FormField label="Exam" id="exam-select">
+              <Select
                 id="exam-select"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-cyan-500"
                 value={selectedExamId}
                 onChange={(event) => setSelectedExamId(event.target.value)}
                 disabled={!selectedAssignment}
@@ -357,172 +358,231 @@ export function TeacherMarksEntry() {
                     {exam.name} ({exam.term.name}) — {formatDate(exam.startDate)}
                   </option>
                 ))}
-              </select>
-            </div>
+              </Select>
+            </FormField>
           </div>
 
           {assignmentInfo ? (
-            <p className="mt-3 text-sm text-slate-600">
-              Working on <span className="font-medium text-slate-900">{assignmentInfo}</span>
-            </p>
+            <div className="rounded-xl bg-secondary-light/30 px-4 py-3 text-sm font-semibold text-secondary border border-secondary-light dark:bg-secondary-light/10">
+              Working on <span className="underline decoration-secondary/30 decoration-2 underline-offset-4">{assignmentInfo}</span>
+            </div>
           ) : null}
+        </CardContent>
+      </Card>
+
+      {studentsError ? (
+        <div className="rounded-xl border border-error/20 bg-error/10 p-4 text-sm font-medium text-error">
+          {studentsError}
         </div>
+      ) : null}
 
-        {studentsError ? <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-rose-700">{studentsError}</p> : null}
+      {studentsLoading ? <p className="text-sm text-text-secondary">Loading students for selection...</p> : null}
 
-        {studentsLoading ? <p className="text-sm text-slate-600">Loading students for the selected stream...</p> : null}
+      {studentsResponse ? (
+        <div className="space-y-8">
+          {reviewLocked ? (
+            <div className="rounded-xl border border-accent/20 bg-accent-light/30 p-4 text-sm font-medium text-accent dark:bg-accent-light/10">
+              This stream and subject have already been reviewed for the selected exam. Further edits are disabled.
+            </div>
+          ) : null}
 
-        {studentsResponse ? (
-          <div className="space-y-6 rounded-3xl border border-slate-200 bg-white/95 p-6 shadow-sm">
-            {reviewLocked ? (
-              <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                This stream and subject have already been reviewed for the selected exam. Further edits are disabled.
-              </p>
-            ) : null}
-
-            <section className="space-y-4">
-              <header>
-                <h2 className="text-2xl font-semibold text-slate-900">Single entry</h2>
-                <p className="text-sm text-slate-600">Update one student at a time.</p>
-              </header>
-              <form className="grid gap-4 md:grid-cols-[2fr,1fr,auto]" onSubmit={handleSingleSubmit}>
-                <select
-                  className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-cyan-500"
-                  value={singleStudentId}
-                  onChange={(event) => setSingleStudentId(event.target.value)}
-                  disabled={reviewLocked}
-                >
-                  <option value="">Select student</option>
-                  {selectedStudents.map((student) => (
-                    <option key={student.id} value={student.id}>
-                      {student.admissionNumber} — {student.firstName} {student.lastName}{" "}
-                      {student.existingScore != null ? `(current: ${student.existingScore})` : ""}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  step="0.1"
-                  value={singleScore}
-                  onChange={(event) => setSingleScore(event.target.value)}
-                  disabled={reviewLocked}
-                  className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-cyan-500"
-                  placeholder="Score"
-                />
-                <button
-                  type="submit"
-                  disabled={singleSubmitDisabled}
-                  className="rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {isSinglePending ? "Saving..." : "Save mark"}
-                </button>
-              </form>
-              {singleClientError ? <p className="text-sm text-rose-600">{singleClientError}</p> : null}
-              {!singleClientError && singleValidationError ? (
-                <p className="text-sm text-rose-600">{singleValidationError}</p>
-              ) : null}
-              {singleMessage ? <p className="text-sm text-slate-600">{singleMessage}</p> : null}
-            </section>
-
-            <section className="space-y-4">
-              <header>
-                <h2 className="text-2xl font-semibold text-slate-900">Bulk upload</h2>
-                <p className="text-sm text-slate-600">
-                  Upload CSV with headers <code className="rounded bg-slate-100 px-2 py-0.5 text-xs">admissionNumber</code> and{" "}
-                  <code className="rounded bg-slate-100 px-2 py-0.5 text-xs">score</code>.
-                </p>
-              </header>
-              <input
-                type="file"
-                accept=".csv"
-                onChange={handleBulkFileChange}
-                disabled={reviewLocked}
-                className="text-sm text-slate-600 file:mr-4 file:rounded-xl file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-slate-800"
-              />
-              {bulkFileName ? <p className="text-xs text-slate-500">Loaded file: {bulkFileName}</p> : null}
-              {bulkError ? <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{bulkError}</p> : null}
-              {bulkSuccess ? (
-                <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{bulkSuccess}</p>
-              ) : null}
-              {bulkRows.length ? (
-                <div className="rounded-2xl border border-slate-200">
-                  <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-600">
-                    CSV preview ({bulkRows.length} rows)
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-slate-200 text-sm">
-                      <thead className="bg-slate-50">
-                        <tr>
-                          <th className="px-3 py-2 text-left text-slate-600">Admission</th>
-                          <th className="px-3 py-2 text-left text-slate-600">Name</th>
-                          <th className="px-3 py-2 text-left text-slate-600">Score</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200 bg-white">
-                        {bulkRows.map((row) => (
-                          <tr key={row.id}>
-                            <td className="px-3 py-2 text-slate-700">{row.admissionNumber}</td>
-                            <td className="px-3 py-2 text-slate-700">
-                              {row.firstName} {row.lastName}
-                            </td>
-                            <td className="px-3 py-2 text-slate-700">{row.score}</td>
-                          </tr>
+          <div className="grid gap-8 lg:grid-cols-12">
+            {/* Single Entry */}
+            <div className="lg:col-span-5">
+              <Card className="h-full">
+                <CardHeader>
+                  <CardTitle>Single Entry</CardTitle>
+                  <CardDescription>Update one student at a time.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form className="space-y-6" onSubmit={handleSingleSubmit}>
+                    <FormField label="Student" id="single-student">
+                      <Select
+                        id="single-student"
+                        value={singleStudentId}
+                        onChange={(event) => setSingleStudentId(event.target.value)}
+                        disabled={reviewLocked}
+                      >
+                        <option value="">Select student</option>
+                        {selectedStudents.map((student) => (
+                          <option key={student.id} value={student.id}>
+                            {student.admissionNumber} — {student.firstName} {student.lastName} {student.existingScore != null ? `(${student.existingScore})` : ""}
+                          </option>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => void handleBulkSubmit()}
-                disabled={reviewLocked || !bulkRows.length || isBulkPending}
-                className="rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {isBulkPending ? "Submitting..." : "Commit bulk marks"}
-              </button>
-            </section>
+                      </Select>
+                    </FormField>
 
-            <section className="space-y-4">
-              <header>
-                <h2 className="text-2xl font-semibold text-slate-900">Current scores</h2>
-                <p className="text-sm text-slate-600">Reference table for the selected exam and stream.</p>
-              </header>
-              <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                <table className="min-w-full divide-y divide-slate-200 text-sm">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Admission</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Student</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Score</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 bg-white">
-                    {selectedStudents.map((student) => (
-                      <tr key={student.id}>
-                        <td className="px-4 py-3 text-slate-900">{student.admissionNumber}</td>
-                        <td className="px-4 py-3 text-slate-900">
-                          {student.firstName} {student.lastName}
-                        </td>
-                        <td className="px-4 py-3 text-slate-700">{student.existingScore != null ? student.existingScore : "—"}</td>
-                      </tr>
-                    ))}
-                    {selectedStudents.length === 0 ? (
-                      <tr>
-                        <td className="px-4 py-6 text-slate-600" colSpan={3}>
-                          No students available for this stream.
-                        </td>
-                      </tr>
+                    <FormField label="Score (0-100)" id="single-score" error={singleClientError || singleValidationError}>
+                      <Input
+                        id="single-score"
+                        type="number"
+                        min={0}
+                        max={100}
+                        step="0.1"
+                        value={singleScore}
+                        onChange={(event) => setSingleScore(event.target.value)}
+                        disabled={reviewLocked}
+                        placeholder="Enter score"
+                      />
+                    </FormField>
+
+                    {singleMessage ? (
+                      <div className="rounded-xl border border-secondary/20 bg-secondary-light/30 p-4 text-sm font-medium text-secondary">
+                        {singleMessage}
+                      </div>
                     ) : null}
-                  </tbody>
-                </table>
-              </div>
-            </section>
+
+                    <PrimaryButton
+                      type="submit"
+                      className="w-full bg-secondary hover:opacity-90"
+                      disabled={singleSubmitDisabled}
+                    >
+                      {isSinglePending ? "Saving..." : "Save Mark"}
+                    </PrimaryButton>
+                  </form>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Bulk Upload */}
+            <div className="lg:col-span-7">
+              <Card className="h-full">
+                <CardHeader>
+                  <CardTitle>Bulk Upload</CardTitle>
+                  <CardDescription>
+                    Upload CSV with headers <code className="rounded bg-background px-1.5 py-0.5 text-xs text-text-primary dark:bg-background-dark dark:text-text-primary-dark">admissionNumber</code> and <code className="rounded bg-background px-1.5 py-0.5 text-xs text-text-primary dark:bg-background-dark dark:text-text-primary-dark">score</code>.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="rounded-2xl border-2 border-dashed border-border-subtle bg-background/50 p-8 text-center dark:border-border-dark dark:bg-background-dark/50">
+                    <label htmlFor="bulk-file" className={`cursor-pointer block ${reviewLocked ? "opacity-50" : ""}`}>
+                      <div className="inline-flex items-center justify-center rounded-2xl bg-secondary-light/50 p-4 mb-4 text-secondary">
+                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                        </svg>
+                      </div>
+                      <p className="text-sm font-bold text-text-primary dark:text-text-primary-dark mb-1">Click to upload CSV</p>
+                      <p className="text-xs text-text-secondary">Standard school marks CSV template</p>
+                    </label>
+                    <input
+                      id="bulk-file"
+                      type="file"
+                      accept=".csv"
+                      onChange={handleBulkFileChange}
+                      disabled={reviewLocked}
+                      className="hidden"
+                    />
+                  </div>
+
+                  {bulkFileName && (
+                    <div className="flex items-center justify-between rounded-xl border border-border-subtle bg-card p-4 shadow-soft dark:border-border-dark dark:bg-card-dark">
+                      <div className="flex items-center space-x-3 overflow-hidden text-secondary">
+                        <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        <span className="text-sm font-semibold truncate">{bulkFileName}</span>
+                      </div>
+                      <span className="text-[10px] font-bold text-secondary bg-secondary-light/50 px-2 py-1 rounded-lg shrink-0 uppercase tracking-wider">
+                        {bulkRows.length} students
+                      </span>
+                    </div>
+                  )}
+
+                  {bulkError ? (
+                    <div className="rounded-xl border border-error/20 bg-error/10 p-4 text-sm font-medium text-error">
+                      {bulkError}
+                    </div>
+                  ) : null}
+
+                  {bulkSuccess ? (
+                    <div className="rounded-xl border border-secondary/20 bg-secondary-light/30 p-4 text-sm font-medium text-secondary">
+                      {bulkSuccess}
+                    </div>
+                  ) : null}
+
+                  {bulkRows.length ? (
+                    <div className="rounded-xl border border-border-subtle overflow-hidden dark:border-border-dark">
+                      <div className="border-b border-border-subtle bg-background/50 px-4 py-2 text-xs font-bold uppercase tracking-wider text-text-secondary dark:border-border-dark">
+                        CSV Preview
+                      </div>
+                      <div className="max-h-48 overflow-y-auto">
+                        <Table>
+                          <TableBody>
+                            {bulkRows.map((row) => (
+                              <TableRow key={row.id}>
+                                <TableCell className="py-2 font-semibold text-text-primary dark:text-text-primary-dark">{row.admissionNumber}</TableCell>
+                                <TableCell className="py-2 text-xs">
+                                  {row.firstName} {row.lastName}
+                                </TableCell>
+                                <TableCell className="py-2 text-right font-bold text-secondary">{row.score}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="pt-2">
+                    <PrimaryButton
+                      type="button"
+                      className="w-full bg-secondary hover:opacity-90"
+                      onClick={() => void handleBulkSubmit()}
+                      disabled={Boolean(reviewLocked || !bulkRows.length || isBulkPending)}
+                    >
+                      {isBulkPending ? "Submitting Marks..." : "Commit Bulk Marks"}
+                    </PrimaryButton>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
-        ) : null}
-      </section>
-    </main>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Current Mark Sheet</CardTitle>
+              <CardDescription>Verified records for the selected combination.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Admission</TableHead>
+                    <TableHead>Student</TableHead>
+                    <TableHead className="text-right">Score</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {selectedStudents.map((student) => (
+                    <TableRow key={student.id}>
+                      <TableCell className="font-semibold text-text-primary dark:text-text-primary-dark">{student.admissionNumber}</TableCell>
+                      <TableCell>
+                        {student.firstName} {student.lastName}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {student.existingScore != null ? (
+                          <span className="inline-flex items-center rounded-lg bg-primary-light px-3 py-1 text-sm font-bold text-primary">
+                            {student.existingScore}
+                          </span>
+                        ) : (
+                          <span className="text-text-secondary/40">—</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {selectedStudents.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={3} className="py-12 text-center text-text-secondary italic">
+                        No student records found for this scope.
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+    </div>
   );
 }

@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button, PrimaryButton } from "@/components/ui/button";
 
 type TeacherRecord = {
   id: string;
@@ -293,7 +298,7 @@ export function TeachersManager() {
     setAssignmentSuccess(
       `Assigned ${assignedTeacher ? `${assignedTeacher.firstName} ${assignedTeacher.lastName}` : "teacher"} to ${
         selectedSubject ? selectedSubject.name : "subject"
-      } for ${selectedClass ? selectedClass.name : "class"} ${selectedStream ? selectedStream.name : "stream"}.`,
+      } for ${selectedClass ? selectedClass.name : "class"} ${selectedStream ? selectedStream.name : "stream"}.`
     );
 
     setAssignmentValues((current) => ({
@@ -322,360 +327,310 @@ export function TeachersManager() {
   const availableSubjects = selectedClass?.classSubjects.map((item) => item.subject) ?? [];
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#eff6ff_0%,#f8fafc_42%,#ffffff_100%)] px-6 py-10 text-slate-900">
-      <section className="mx-auto max-w-6xl space-y-8">
-        <Card className="border-slate-200 bg-white/95">
-          <CardHeader className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Teachers</p>
-              <CardTitle className="text-3xl">Teacher accounts and assignments</CardTitle>
-              <CardDescription className="text-base">
-                Create teacher logins, edit directory details, and map stream + subject scopes exactly as allowed in the
-                marks workflow.
-              </CardDescription>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                void loadTeachers();
-              }}
-              className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900 transition hover:bg-slate-50"
-            >
-              Refresh list
-            </button>
-          </CardHeader>
-          <CardContent>
-            {isLoadingTeachers ? <p className="text-sm text-slate-600">Loading teachers...</p> : null}
-            {teachersError ? <p className="text-sm text-rose-600">{teachersError}</p> : null}
-            {!isLoadingTeachers && !teachersError ? (
-              <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                <table className="min-w-full divide-y divide-slate-200 text-sm">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Teacher</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Contact</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Assignments</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 bg-white">
-                    {teachers.map((teacher) => {
-                      const activeClassTeacher = teacher.classTeacherAssignments.find((assignment) => assignment.isActive);
+    <div className="space-y-8">
+      <Card>
+        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-1">
+            <CardTitle>Teacher Management</CardTitle>
+            <CardDescription>
+              Manage teacher accounts, contact details, and their stream + subject assignments.
+            </CardDescription>
+          </div>
+          <Button variant="outline" onClick={() => void loadTeachers()}>
+            Refresh List
+          </Button>
+        </CardHeader>
+        <CardContent className="p-0">
+          {isLoadingTeachers ? (
+            <div className="p-8 text-center text-sm text-text-secondary">Loading teachers...</div>
+          ) : null}
+          {teachersError ? (
+            <div className="p-8 text-center text-sm font-medium text-error">{teachersError}</div>
+          ) : null}
+          {!isLoadingTeachers && !teachersError ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Teacher</TableHead>
+                  <TableHead>Contact & Role</TableHead>
+                  <TableHead>Assigned Subjects</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {teachers.map((teacher) => {
+                  const activeClassTeacher = teacher.classTeacherAssignments.find((assignment) => assignment.isActive);
 
-                      return (
-                        <tr key={teacher.id}>
-                          <td className="px-4 py-3">
-                            <p className="font-semibold text-slate-900">
-                              {teacher.firstName} {teacher.lastName}
-                            </p>
-                            <p className="text-xs uppercase tracking-wide text-slate-500">#{teacher.employeeNumber}</p>
-                          </td>
-                          <td className="px-4 py-3 text-slate-700">
-                            <p>{teacher.user.email}</p>
-                            <p className="text-xs text-slate-500">
-                              Active class teacher:{" "}
-                              {activeClassTeacher
-                                ? `${activeClassTeacher.stream.class.name} ${activeClassTeacher.stream.name}`
-                                : "None"}
-                            </p>
-                          </td>
-                          <td className="px-4 py-3">
-                            {teacher.streamSubjectAssignments.length ? (
-                              <ul className="space-y-1 text-slate-700">
-                                {teacher.streamSubjectAssignments.map((assignment) => (
-                                  <li key={assignment.id}>
-                                    {assignment.stream.class.name} {assignment.stream.name} · {assignment.subject.name} (
-                                    {assignment.subject.code})
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <p className="text-slate-500">No stream-subject assignments yet.</p>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <button
-                              type="button"
-                              onClick={() => handleEditTeacher(teacher)}
-                              className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-900 transition hover:bg-slate-50"
-                            >
-                              Edit
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {teachers.length === 0 ? (
-                      <tr>
-                        <td className="px-4 py-6 text-slate-600" colSpan={4}>
-                          No teachers found. Create your first teacher below.
-                        </td>
-                      </tr>
-                    ) : null}
-                  </tbody>
-                </table>
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
+                  return (
+                    <TableRow key={teacher.id}>
+                      <TableCell>
+                        <p className="font-semibold text-text-primary dark:text-text-primary-dark">
+                          {teacher.firstName} {teacher.lastName}
+                        </p>
+                        <p className="mt-0.5 text-xs font-bold uppercase tracking-wider text-text-secondary dark:text-text-secondary-dark">
+                          ID: {teacher.employeeNumber}
+                        </p>
+                      </TableCell>
+                      <TableCell>
+                        <p className="text-text-secondary dark:text-text-secondary-dark">{teacher.user.email}</p>
+                        <div className="mt-2 flex items-center gap-2">
+                          <span className="text-xs font-medium text-text-secondary dark:text-text-secondary-dark">Class Teacher:</span>
+                          {activeClassTeacher ? (
+                            <span className="inline-flex items-center rounded-lg bg-primary-light px-2.5 py-1 text-xs font-semibold text-primary">
+                              {activeClassTeacher.stream.class.name} {activeClassTeacher.stream.name}
+                            </span>
+                          ) : (
+                            <span className="text-xs italic text-text-secondary/60">Unassigned</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {teacher.streamSubjectAssignments.length ? (
+                          <div className="flex flex-wrap gap-2">
+                            {teacher.streamSubjectAssignments.map((assignment) => (
+                              <span
+                                key={assignment.id}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-border-subtle bg-background px-2.5 py-1 text-xs font-medium text-text-primary dark:border-border-dark dark:bg-background-dark dark:text-text-primary-dark"
+                              >
+                                <strong className="font-bold text-primary">
+                                  {assignment.stream.class.name} {assignment.stream.name}
+                                </strong>
+                                <span className="text-border-subtle dark:text-border-dark">|</span>
+                                {assignment.subject.name}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-xs italic text-text-secondary/60">No subject assignments.</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" onClick={() => handleEditTeacher(teacher)}>
+                          Edit
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                {teachers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="py-10 text-center text-text-secondary">
+                      No teachers found. Use the form below to add a teacher.
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+          ) : null}
+        </CardContent>
+      </Card>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card className="border-slate-200 bg-white/95">
+      <div className="grid gap-8 lg:grid-cols-12">
+        <div className="lg:col-span-7">
+          <Card>
             <CardHeader>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-                {formMode === "create" ? "Create Teacher" : "Edit Teacher"}
-              </p>
-              <CardTitle>{formMode === "create" ? "New teacher profile" : "Update teacher details"}</CardTitle>
-              <CardDescription className="text-base">
+              <CardTitle>
+                {formMode === "create" ? "New Teacher Details" : "Update Teacher Details"}
+              </CardTitle>
+              <CardDescription>
                 {formMode === "create"
-                  ? "Provision login credentials and directory information for a teacher."
-                  : "Update email, directory data, or reset the password for the selected teacher."}
+                  ? "Enter personal information and create login credentials."
+                  : "Modify directory details or reset password."}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form className="space-y-5" onSubmit={handleTeacherSubmit}>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700" htmlFor="teacher-firstName">
-                    First name
-                  </label>
-                  <input
-                    id="teacher-firstName"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500"
-                    value={teacherValues.firstName}
-                    onChange={(event) =>
-                      setTeacherValues((current) => ({ ...current, firstName: event.target.value }))
-                    }
-                  />
-                  {teacherFieldErrors.firstName ? (
-                    <p className="text-sm text-rose-600">{teacherFieldErrors.firstName}</p>
-                  ) : null}
+              <form className="space-y-6" onSubmit={handleTeacherSubmit}>
+                <div className="grid gap-6 md:grid-cols-2">
+                  <FormField label="First Name" id="teacher-firstName" error={teacherFieldErrors.firstName}>
+                    <Input
+                      id="teacher-firstName"
+                      placeholder="Jane"
+                      value={teacherValues.firstName}
+                      onChange={(event) =>
+                        setTeacherValues((current) => ({ ...current, firstName: event.target.value }))
+                      }
+                    />
+                  </FormField>
+
+                  <FormField label="Last Name" id="teacher-lastName" error={teacherFieldErrors.lastName}>
+                    <Input
+                      id="teacher-lastName"
+                      placeholder="Doe"
+                      value={teacherValues.lastName}
+                      onChange={(event) =>
+                        setTeacherValues((current) => ({ ...current, lastName: event.target.value }))
+                      }
+                    />
+                  </FormField>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700" htmlFor="teacher-lastName">
-                    Last name
-                  </label>
-                  <input
-                    id="teacher-lastName"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500"
-                    value={teacherValues.lastName}
-                    onChange={(event) => setTeacherValues((current) => ({ ...current, lastName: event.target.value }))}
-                  />
-                  {teacherFieldErrors.lastName ? (
-                    <p className="text-sm text-rose-600">{teacherFieldErrors.lastName}</p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700" htmlFor="teacher-employeeNumber">
-                    Employee number
-                  </label>
-                  <input
+                <FormField label="Employee ID" id="teacher-employeeNumber" error={teacherFieldErrors.employeeNumber}>
+                  <Input
                     id="teacher-employeeNumber"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500"
+                    placeholder="EMP-001"
                     value={teacherValues.employeeNumber}
                     onChange={(event) =>
                       setTeacherValues((current) => ({ ...current, employeeNumber: event.target.value }))
                     }
                   />
-                  {teacherFieldErrors.employeeNumber ? (
-                    <p className="text-sm text-rose-600">{teacherFieldErrors.employeeNumber}</p>
-                  ) : null}
-                </div>
+                </FormField>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700" htmlFor="teacher-email">
-                    Email
-                  </label>
-                  <input
+                <FormField label="Email Address" id="teacher-email" error={teacherFieldErrors.email}>
+                  <Input
                     id="teacher-email"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500"
+                    type="email"
+                    placeholder="jane.doe@school.edu"
                     value={teacherValues.email}
                     onChange={(event) => setTeacherValues((current) => ({ ...current, email: event.target.value }))}
                   />
-                  {teacherFieldErrors.email ? <p className="text-sm text-rose-600">{teacherFieldErrors.email}</p> : null}
-                </div>
+                </FormField>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700" htmlFor="teacher-password">
-                    {formMode === "create" ? "Temporary password" : "Reset password (optional)"}
-                  </label>
-                  <input
+                <FormField 
+                  label={formMode === "create" ? "Initial Password" : "Reset Password"} 
+                  id="teacher-password" 
+                  error={teacherFieldErrors.password}
+                >
+                  <Input
                     id="teacher-password"
                     type="password"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500"
                     value={teacherValues.password}
                     onChange={(event) => setTeacherValues((current) => ({ ...current, password: event.target.value }))}
-                    placeholder={formMode === "edit" ? "Leave blank to keep existing password" : undefined}
+                    placeholder={formMode === "edit" ? "Leave blank to keep existing" : "Minimum 8 characters"}
                   />
-                  {teacherFieldErrors.password ? (
-                    <p className="text-sm text-rose-600">{teacherFieldErrors.password}</p>
-                  ) : null}
-                </div>
+                </FormField>
 
                 {teacherFormError ? (
-                  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                  <div className="rounded-xl border border-error/20 bg-error/10 p-4 text-sm font-medium text-error">
                     {teacherFormError}
                   </div>
                 ) : null}
 
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="submit"
-                    disabled={isSubmittingTeacher}
-                    className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {isSubmittingTeacher
-                      ? "Saving..."
-                      : formMode === "create"
-                        ? "Create teacher"
-                        : "Save changes"}
-                  </button>
+                <div className="flex flex-wrap items-center gap-3">
+                  <PrimaryButton type="submit" disabled={isSubmittingTeacher}>
+                    {isSubmittingTeacher ? "Saving..." : formMode === "create" ? "Create Teacher" : "Save Changes"}
+                  </PrimaryButton>
                   {formMode === "edit" ? (
-                    <button
-                      type="button"
-                      onClick={resetTeacherForm}
-                      className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900 transition hover:bg-slate-50"
-                    >
-                      Cancel edit
-                    </button>
+                    <Button type="button" variant="outline" onClick={resetTeacherForm}>
+                      Cancel
+                    </Button>
                   ) : null}
                 </div>
               </form>
             </CardContent>
           </Card>
+        </div>
 
-          <Card className="border-slate-200 bg-white/95">
+        <div className="lg:col-span-5">
+          <Card>
             <CardHeader>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Assignment</p>
-              <CardTitle>Stream + subject scope</CardTitle>
-              <CardDescription className="text-base">
-                Teachers may only edit marks for the specific stream and subject pairs configured here. Subjects are
-                limited to those already linked to the class.
+              <CardTitle>Stream & Subject Scope</CardTitle>
+              <CardDescription>
+                Assign teachers to specific streams and subjects for mark entry.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {isSetupLoading ? <p className="text-sm text-slate-600">Loading class data...</p> : null}
-              {setupError ? <p className="text-sm text-rose-600">{setupError}</p> : null}
+              {isSetupLoading ? (
+                <div className="pb-4 text-sm text-text-secondary">Loading class data...</div>
+              ) : null}
+              {setupError ? (
+                <div className="pb-4 text-sm font-medium text-error">{setupError}</div>
+              ) : null}
+
               <form className="space-y-5" onSubmit={handleAssignmentSubmit}>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700" htmlFor="assignment-teacherId">
-                    Teacher
-                  </label>
-                  <select
+                <FormField label="Teacher" id="assignment-teacherId" error={assignmentFieldErrors.teacherId}>
+                  <Select
                     id="assignment-teacherId"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500"
                     value={assignmentValues.teacherId}
                     onChange={(event) => handleAssignmentChange("teacherId", event.target.value)}
                     disabled={teachers.length === 0}
                   >
-                    <option value="">Select teacher</option>
+                    <option value="">Select a teacher...</option>
                     {teachers.map((teacher) => (
                       <option key={teacher.id} value={teacher.id}>
                         {teacher.firstName} {teacher.lastName} ({teacher.employeeNumber})
                       </option>
                     ))}
-                  </select>
-                  {assignmentFieldErrors.teacherId ? (
-                    <p className="text-sm text-rose-600">{assignmentFieldErrors.teacherId}</p>
-                  ) : null}
-                </div>
+                  </Select>
+                </FormField>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700" htmlFor="assignment-classId">
-                    Class
-                  </label>
-                  <select
+                <FormField label="Class" id="assignment-classId" error={assignmentFieldErrors.classId}>
+                  <Select
                     id="assignment-classId"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500"
                     value={assignmentValues.classId}
                     onChange={(event) => handleAssignmentChange("classId", event.target.value)}
                     disabled={!sortedClasses.length}
                   >
-                    <option value="">Select class</option>
+                    <option value="">Select a class...</option>
                     {sortedClasses.map((schoolClass) => (
                       <option key={schoolClass.id} value={schoolClass.id}>
                         {schoolClass.name}
                       </option>
                     ))}
-                  </select>
-                  {assignmentFieldErrors.classId ? (
-                    <p className="text-sm text-rose-600">{assignmentFieldErrors.classId}</p>
-                  ) : null}
-                </div>
+                  </Select>
+                </FormField>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700" htmlFor="assignment-streamId">
-                    Stream
-                  </label>
-                  <select
-                    id="assignment-streamId"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500"
-                    value={assignmentValues.streamId}
-                    onChange={(event) => handleAssignmentChange("streamId", event.target.value)}
-                    disabled={!availableStreams.length}
-                  >
-                    <option value="">Select stream</option>
-                    {availableStreams.map((stream) => (
-                      <option key={stream.id} value={stream.id}>
-                        {stream.name}
-                      </option>
-                    ))}
-                  </select>
-                  {assignmentFieldErrors.streamId ? (
-                    <p className="text-sm text-rose-600">{assignmentFieldErrors.streamId}</p>
-                  ) : null}
-                </div>
+                <div className="grid gap-5">
+                  <FormField label="Stream" id="assignment-streamId" error={assignmentFieldErrors.streamId}>
+                    <Select
+                      id="assignment-streamId"
+                      value={assignmentValues.streamId}
+                      onChange={(event) => handleAssignmentChange("streamId", event.target.value)}
+                      disabled={!availableStreams.length}
+                    >
+                      <option value="">Select a stream...</option>
+                      {availableStreams.map((stream) => (
+                        <option key={stream.id} value={stream.id}>
+                          {stream.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormField>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700" htmlFor="assignment-subjectId">
-                    Subject
-                  </label>
-                  <select
-                    id="assignment-subjectId"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500"
-                    value={assignmentValues.subjectId}
-                    onChange={(event) => handleAssignmentChange("subjectId", event.target.value)}
-                    disabled={!availableSubjects.length}
-                  >
-                    <option value="">Select subject</option>
-                    {availableSubjects.map((subject) => (
-                      <option key={subject.id} value={subject.id}>
-                        {subject.name} ({subject.code})
-                      </option>
-                    ))}
-                  </select>
-                  {assignmentFieldErrors.subjectId ? (
-                    <p className="text-sm text-rose-600">{assignmentFieldErrors.subjectId}</p>
-                  ) : null}
+                  <FormField label="Subject" id="assignment-subjectId" error={assignmentFieldErrors.subjectId}>
+                    <Select
+                      id="assignment-subjectId"
+                      value={assignmentValues.subjectId}
+                      onChange={(event) => handleAssignmentChange("subjectId", event.target.value)}
+                      disabled={!availableSubjects.length}
+                    >
+                      <option value="">Select a subject...</option>
+                      {availableSubjects.map((subject) => (
+                        <option key={subject.id} value={subject.id}>
+                          {subject.name} ({subject.code})
+                        </option>
+                      ))}
+                    </Select>
+                  </FormField>
                 </div>
 
                 {assignmentError ? (
-                  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                  <div className="rounded-xl border border-error/20 bg-error/10 p-4 text-sm font-medium text-error">
                     {assignmentError}
                   </div>
                 ) : null}
 
                 {assignmentSuccess ? (
-                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                  <div className="rounded-xl border border-secondary/20 bg-secondary-light/30 p-4 text-sm font-medium text-secondary">
                     {assignmentSuccess}
                   </div>
                 ) : null}
 
-                <button
-                  type="submit"
-                  disabled={
-                    isSubmittingAssignment || !teachers.length || !sortedClasses.length || !assignmentValues.teacherId
-                  }
-                  className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {isSubmittingAssignment ? "Assigning..." : "Assign teacher"}
-                </button>
+                <div className="pt-2">
+                  <PrimaryButton
+                    type="submit"
+                    className="w-full"
+                    disabled={
+                      isSubmittingAssignment || !teachers.length || !sortedClasses.length || !assignmentValues.teacherId || !assignmentValues.streamId || !assignmentValues.subjectId
+                    }
+                  >
+                    {isSubmittingAssignment ? "Assigning Scope..." : "Assign Scope"}
+                  </PrimaryButton>
+                </div>
               </form>
             </CardContent>
           </Card>
         </div>
-      </section>
-    </main>
+      </div>
+    </div>
   );
 }

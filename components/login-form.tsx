@@ -3,23 +3,10 @@
 import { FormEvent, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-
-const wrapperStyle = {
-  width: "100%",
-  maxWidth: "420px",
-  background: "#ffffff",
-  borderRadius: "18px",
-  padding: "32px",
-  boxShadow: "0 22px 60px rgba(21, 32, 51, 0.12)",
-};
-
-const inputStyle = {
-  width: "100%",
-  padding: "12px 14px",
-  borderRadius: "10px",
-  border: "1px solid #cbd4e1",
-  marginTop: "8px",
-};
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
+import { PrimaryButton } from "@/components/ui/button";
 
 export function LoginForm() {
   const router = useRouter();
@@ -56,67 +43,50 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} style={wrapperStyle}>
-      <p style={{ margin: 0, color: "#5b6b87", fontSize: "13px" }}>SchoolMS</p>
-      <h1 style={{ margin: "12px 0 8px", fontSize: "30px" }}>Sign in</h1>
-      <p style={{ margin: "0 0 24px", color: "#4f5f79", lineHeight: 1.5 }}>
-        Use your admin or teacher credentials to access the system.
-      </p>
+    <Card className="w-full max-w-md shadow-2xl">
+      <CardHeader className="text-center">
+        <p className="mb-2 text-xs font-bold uppercase tracking-[0.3em] text-primary">SchoolMS</p>
+        <CardTitle className="text-3xl font-extrabold tracking-tight">Welcome Back</CardTitle>
+        <CardDescription className="text-base">
+          Sign in to access your dashboard.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <FormField label="Email" id="email">
+            <Input
+              required
+              id="email"
+              type="email"
+              name="email"
+              autoComplete="email"
+              placeholder="admin@schoolms.local"
+            />
+          </FormField>
 
-      <label style={{ display: "block", marginBottom: "16px" }}>
-        <span>Email</span>
-        <input
-          required
-          type="email"
-          name="email"
-          autoComplete="email"
-          style={inputStyle}
-          placeholder="admin@schoolms.local"
-        />
-      </label>
+          <FormField label="Password" id="password">
+            <Input
+              required
+              id="password"
+              type="password"
+              name="password"
+              minLength={8}
+              autoComplete="current-password"
+              placeholder="••••••••"
+            />
+          </FormField>
 
-      <label style={{ display: "block", marginBottom: "16px" }}>
-        <span>Password</span>
-        <input
-          required
-          type="password"
-          name="password"
-          minLength={8}
-          autoComplete="current-password"
-          style={inputStyle}
-          placeholder="Enter your password"
-        />
-      </label>
+          {error ? (
+            <div className="rounded-xl border border-error/20 bg-error/10 p-4 text-center text-sm font-medium text-error">
+              {error}
+            </div>
+          ) : null}
 
-      {error ? (
-        <p
-          style={{
-            margin: "0 0 16px",
-            padding: "12px 14px",
-            borderRadius: "10px",
-            background: "#fef2f2",
-            color: "#b42318",
-          }}
-        >
-          {error}
-        </p>
-      ) : null}
-
-      <button
-        type="submit"
-        disabled={isLoading}
-        style={{
-          width: "100%",
-          padding: "12px 16px",
-          borderRadius: "10px",
-          border: "none",
-          background: "#152033",
-          color: "#ffffff",
-          cursor: isLoading ? "wait" : "pointer",
-        }}
-      >
-        {isLoading ? "Signing in..." : "Sign in"}
-      </button>
-    </form>
+          <PrimaryButton type="submit" disabled={isLoading} className="w-full py-3.5">
+            {isLoading ? "Signing in..." : "Sign in"}
+          </PrimaryButton>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

@@ -2,7 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
+import { Button, PrimaryButton } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type ExamRecord = {
   id: string;
@@ -319,313 +324,280 @@ export function ExamsManager() {
   }, [configurationClassId, setup.classes]);
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#ecfeff_0%,#f8fafc_42%,#ffffff_100%)] px-6 py-10 text-slate-900">
-      <section className="mx-auto max-w-6xl space-y-8">
-        <Card className="border-cyan-100 bg-white/95">
-          <CardHeader className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-600">Exams</p>
-              <CardTitle className="text-3xl">Exam schedule</CardTitle>
-              <CardDescription className="text-base">
-                Review all exams, linked terms, and class-subject scopes before marks entry opens.
-              </CardDescription>
-            </div>
-            <button
-              type="button"
-              onClick={() => void loadExams()}
-              className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 transition hover:bg-slate-50"
-            >
-              Refresh list
-            </button>
+    <div className="space-y-8">
+      <Card>
+        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div className="space-y-1">
+            <CardTitle>Exam Schedule</CardTitle>
+            <CardDescription>
+              Review all exams, linked terms, and class-subject scopes before marks entry opens.
+            </CardDescription>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void loadExams()}
+          >
+            Refresh list
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {isLoadingExams ? (
+            <p className="py-8 text-center text-sm text-text-secondary">Loading exams...</p>
+          ) : examsError ? (
+            <p className="py-8 text-center text-sm text-error">{examsError}</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Exam</TableHead>
+                  <TableHead>Term</TableHead>
+                  <TableHead>Dates</TableHead>
+                  <TableHead>Configurations</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {exams.map((exam) => {
+                  const classGroups = exam.configurations.reduce<Record<string, { className: string; subjects: string[] }>>(
+                    (acc, config) => {
+                      const key = config.class.id;
+                      if (!acc[key]) {
+                        acc[key] = { className: config.class.name, subjects: [] };
+                      }
+                      acc[key].subjects.push(config.subject.name);
+                      return acc;
+                    },
+                    {},
+                  );
+                  return (
+                    <TableRow key={exam.id}>
+                      <TableCell className="font-semibold text-text-primary">{exam.name}</TableCell>
+                      <TableCell>
+                        {exam.term.academicYear.name} · {exam.term.name}
+                      </TableCell>
+                      <TableCell>
+                        {formatDate(exam.startDate)}{" "}
+                        {exam.endDate ? (
+                          <>
+                            – {formatDate(exam.endDate)}
+                          </>
+                        ) : null}
+                      </TableCell>
+                      <TableCell>
+                        {Object.keys(classGroups).length === 0 ? (
+                          <span className="text-text-secondary italic">Not configured</span>
+                        ) : (
+                          <ul className="space-y-1">
+                            {Object.values(classGroups).map((group) => (
+                              <li key={group.className}>
+                                <span className="font-semibold text-text-primary">{group.className}:</span> {group.subjects.join(", ")}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => handleEditExam(exam)}
+                        >
+                          Edit
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                {exams.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="py-12 text-center text-text-secondary">
+                      No exams found.
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>{formMode === "create" ? "New Exam" : "Update Exam Details"}</CardTitle>
+            <CardDescription>
+              Link exams to academic terms and keep timelines accurate.
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            {isLoadingExams ? <p className="text-sm text-slate-600">Loading exams...</p> : null}
-            {examsError ? <p className="text-sm text-rose-600">{examsError}</p> : null}
-            {!isLoadingExams && !examsError ? (
-              <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                <table className="min-w-full divide-y divide-slate-200 text-sm">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Exam</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Term</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Dates</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Configurations</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 bg-white">
-                    {exams.map((exam) => {
-                      const classGroups = exam.configurations.reduce<Record<string, { className: string; subjects: string[] }>>(
-                        (acc, config) => {
-                          const key = config.class.id;
-                          if (!acc[key]) {
-                            acc[key] = { className: config.class.name, subjects: [] };
-                          }
-                          acc[key].subjects.push(config.subject.name);
-                          return acc;
-                        },
-                        {},
-                      );
-                      return (
-                        <tr key={exam.id}>
-                          <td className="px-4 py-3 font-semibold text-slate-900">{exam.name}</td>
-                          <td className="px-4 py-3 text-slate-700">
-                            {exam.term.academicYear.name} · {exam.term.name}
-                          </td>
-                          <td className="px-4 py-3 text-slate-700">
-                            {formatDate(exam.startDate)}{" "}
-                            {exam.endDate ? (
-                              <>
-                                – {formatDate(exam.endDate)}
-                              </>
-                            ) : null}
-                          </td>
-                          <td className="px-4 py-3 text-slate-700">
-                            {Object.keys(classGroups).length === 0 ? (
-                              <span className="text-slate-500">Not configured</span>
-                            ) : (
-                              <ul className="space-y-1">
-                                {Object.values(classGroups).map((group) => (
-                                  <li key={group.className}>
-                                    <span className="font-semibold">{group.className}:</span> {group.subjects.join(", ")}
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <button
-                              type="button"
-                              onClick={() => handleEditExam(exam)}
-                              className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-900 transition hover:bg-slate-50"
-                            >
-                              Edit
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {exams.length === 0 ? (
-                      <tr>
-                        <td className="px-4 py-6 text-slate-600" colSpan={5}>
-                          No exams found.
-                        </td>
-                      </tr>
-                    ) : null}
-                  </tbody>
-                </table>
+            <form className="space-y-5" onSubmit={handleExamSubmit}>
+              <FormField label="Term" error={examFieldErrors.termId}>
+                <Select
+                  id="exam-term"
+                  value={examValues.termId}
+                  onChange={(event) => setExamValues((current) => ({ ...current, termId: event.target.value }))}
+                >
+                  <option value="">Select term</option>
+                  {termOptions.map((term) => (
+                    <option key={term.id} value={term.id}>
+                      {term.label}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+
+              <FormField label="Name" error={examFieldErrors.name}>
+                <Input
+                  id="exam-name"
+                  value={examValues.name}
+                  onChange={(event) => setExamValues((current) => ({ ...current, name: event.target.value }))}
+                  placeholder="e.g., End of Term 1"
+                />
+              </FormField>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <FormField label="Start Date" error={examFieldErrors.startDate}>
+                  <Input
+                    id="exam-start"
+                    type="date"
+                    value={examValues.startDate}
+                    onChange={(event) => setExamValues((current) => ({ ...current, startDate: event.target.value }))}
+                  />
+                </FormField>
+                <FormField label="End Date (Optional)" error={examFieldErrors.endDate}>
+                  <Input
+                    id="exam-end"
+                    type="date"
+                    value={examValues.endDate}
+                    onChange={(event) => setExamValues((current) => ({ ...current, endDate: event.target.value }))}
+                  />
+                </FormField>
               </div>
-            ) : null}
+
+              {examFormError ? (
+                <div className="rounded-xl border border-error/20 bg-error/5 p-4 text-sm text-error">{examFormError}</div>
+              ) : null}
+
+              <div className="flex flex-wrap gap-3 pt-2">
+                <PrimaryButton type="submit" disabled={isSubmittingExam}>
+                  {isSubmittingExam ? "Saving..." : formMode === "create" ? "Create Exam" : "Save Changes"}
+                </PrimaryButton>
+                {formMode === "edit" ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={resetExamForm}
+                  >
+                    Cancel
+                  </Button>
+                ) : null}
+              </div>
+            </form>
           </CardContent>
         </Card>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card className="border-cyan-100 bg-white/95">
-            <CardHeader>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-600">
-                {formMode === "create" ? "Create exam" : "Edit exam"}
-              </p>
-              <CardTitle>{formMode === "create" ? "New exam" : "Update exam details"}</CardTitle>
-              <CardDescription className="text-base">
-                Link exams to academic terms and keep timelines accurate for teachers and reports.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form className="space-y-5" onSubmit={handleExamSubmit}>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700" htmlFor="exam-term">
-                    Term
-                  </label>
-                  <select
-                    id="exam-term"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-cyan-500"
-                    value={examValues.termId}
-                    onChange={(event) => setExamValues((current) => ({ ...current, termId: event.target.value }))}
-                  >
-                    <option value="">Select term</option>
-                    {termOptions.map((term) => (
-                      <option key={term.id} value={term.id}>
-                        {term.label}
-                      </option>
-                    ))}
-                  </select>
-                  {examFieldErrors.termId ? <p className="text-sm text-rose-600">{examFieldErrors.termId}</p> : null}
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700" htmlFor="exam-name">
-                    Name
-                  </label>
-                  <input
-                    id="exam-name"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-cyan-500"
-                    value={examValues.name}
-                    onChange={(event) => setExamValues((current) => ({ ...current, name: event.target.value }))}
-                  />
-                  {examFieldErrors.name ? <p className="text-sm text-rose-600">{examFieldErrors.name}</p> : null}
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700" htmlFor="exam-start">
-                      Start date
-                    </label>
-                    <input
-                      id="exam-start"
-                      type="date"
-                      className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-cyan-500"
-                      value={examValues.startDate}
-                      onChange={(event) => setExamValues((current) => ({ ...current, startDate: event.target.value }))}
-                    />
-                    {examFieldErrors.startDate ? <p className="text-sm text-rose-600">{examFieldErrors.startDate}</p> : null}
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700" htmlFor="exam-end">
-                      End date (optional)
-                    </label>
-                    <input
-                      id="exam-end"
-                      type="date"
-                      className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-cyan-500"
-                      value={examValues.endDate}
-                      onChange={(event) => setExamValues((current) => ({ ...current, endDate: event.target.value }))}
-                    />
-                    {examFieldErrors.endDate ? <p className="text-sm text-rose-600">{examFieldErrors.endDate}</p> : null}
-                  </div>
-                </div>
-
-                {examFormError ? (
-                  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{examFormError}</div>
-                ) : null}
-
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="submit"
-                    disabled={isSubmittingExam}
-                    className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {isSubmittingExam ? "Saving..." : formMode === "create" ? "Create exam" : "Save changes"}
-                  </button>
-                  {formMode === "edit" ? (
-                    <button
-                      type="button"
-                      onClick={resetExamForm}
-                      className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900 transition hover:bg-slate-50"
-                    >
-                      Cancel edit
-                    </button>
-                  ) : null}
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-
-          <Card className="border-cyan-100 bg-white/95">
-            <CardHeader>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-600">Configuration</p>
-              <CardTitle>Class subject scope</CardTitle>
-              <CardDescription className="text-base">
-                Align each exam with the exact class/subject mix allowed for marks entry.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form className="space-y-5" onSubmit={handleConfigurationSubmit}>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700" htmlFor="config-exam">
-                    Exam
-                  </label>
-                  <select
-                    id="config-exam"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-cyan-500"
-                    value={configurationExamId}
-                    onChange={(event) => {
-                      setConfigurationExamId(event.target.value);
-                      setConfigurationSuccess(null);
-                    }}
-                  >
-                    <option value="">Select exam</option>
-                    {exams.map((exam) => (
-                      <option key={exam.id} value={exam.id}>
-                        {exam.name} ({exam.term.academicYear.name} · {exam.term.name})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700" htmlFor="config-class">
-                    Class
-                  </label>
-                  <select
-                    id="config-class"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-cyan-500"
-                    value={configurationClassId}
-                    onChange={(event) => {
-                      setConfigurationClassId(event.target.value);
-                      setConfigurationSuccess(null);
-                    }}
-                    disabled={!configurationExamId}
-                  >
-                    <option value="">Select class</option>
-                    {sortedClasses.map((cls) => (
-                      <option key={cls.id} value={cls.id}>
-                        {cls.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {isLoadingConfiguration ? <p className="text-sm text-slate-600">Loading configuration...</p> : null}
-
-                <div className="space-y-2">
-                  <p className="text-sm font-semibold text-slate-700">Subjects</p>
-                  {selectedClassSubjects.length === 0 ? (
-                    <p className="text-sm text-slate-500">Select a class to view its mapped subjects.</p>
-                  ) : (
-                    <div className="grid gap-2">
-                      {selectedClassSubjects.map((item) => (
-                        <label
-                          key={item.subject.id}
-                          className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedSubjectIds.includes(item.subject.id)}
-                            onChange={() => handleSubjectToggle(item.subject.id)}
-                          />
-                          {item.subject.name} ({item.subject.code})
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {configurationError ? (
-                  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{configurationError}</div>
-                ) : null}
-
-                {configurationSuccess ? (
-                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                    {configurationSuccess}
-                  </div>
-                ) : null}
-
-                <button
-                  type="submit"
-                  disabled={!configurationExamId || !configurationClassId || isSavingConfiguration}
-                  className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+        <Card>
+          <CardHeader>
+            <CardTitle>Class Subject Scope</CardTitle>
+            <CardDescription>
+              Align each exam with the exact class/subject mix allowed for marks entry.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-5" onSubmit={handleConfigurationSubmit}>
+              <FormField label="Exam">
+                <Select
+                  id="config-exam"
+                  value={configurationExamId}
+                  onChange={(event) => {
+                    setConfigurationExamId(event.target.value);
+                    setConfigurationSuccess(null);
+                  }}
                 >
-                  {isSavingConfiguration ? "Saving..." : "Save configuration"}
-                </button>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
+                  <option value="">Select exam</option>
+                  {exams.map((exam) => (
+                    <option key={exam.id} value={exam.id}>
+                      {exam.name} ({exam.term.academicYear.name} · {exam.term.name})
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
 
-        {setupError ? (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{setupError}</div>
-        ) : null}
-      </section>
-    </main>
+              <FormField label="Class">
+                <Select
+                  id="config-class"
+                  value={configurationClassId}
+                  onChange={(event) => {
+                    setConfigurationClassId(event.target.value);
+                    setConfigurationSuccess(null);
+                  }}
+                  disabled={!configurationExamId}
+                >
+                  <option value="">Select class</option>
+                  {sortedClasses.map((cls) => (
+                    <option key={cls.id} value={cls.id}>
+                      {cls.name}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+
+              {isLoadingConfiguration ? (
+                <p className="text-sm text-text-secondary animate-pulse">Loading configuration...</p>
+              ) : null}
+
+              <div className="space-y-3">
+                <p className="text-sm font-semibold text-text-primary">Subjects</p>
+                {selectedClassSubjects.length === 0 ? (
+                  <p className="text-sm text-text-secondary italic">Select a class to view its mapped subjects.</p>
+                ) : (
+                  <div className="grid gap-2">
+                    {selectedClassSubjects.map((item) => (
+                      <label
+                        key={item.subject.id}
+                        className="flex cursor-pointer items-center gap-3 rounded-xl border border-border-subtle bg-background/50 px-4 py-2.5 text-sm text-text-primary transition hover:bg-primary-light/10"
+                      >
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-border-subtle text-primary focus:ring-primary"
+                          checked={selectedSubjectIds.includes(item.subject.id)}
+                          onChange={() => handleSubjectToggle(item.subject.id)}
+                        />
+                        <span>{item.subject.name} ({item.subject.code})</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {configurationError ? (
+                <div className="rounded-xl border border-error/20 bg-error/5 p-4 text-sm text-error">{configurationError}</div>
+              ) : null}
+
+              {configurationSuccess ? (
+                <div className="rounded-xl border border-success/20 bg-success/5 p-4 text-sm text-success">
+                  {configurationSuccess}
+                </div>
+              ) : null}
+
+              <div className="pt-2">
+                <PrimaryButton
+                  type="submit"
+                  className="w-full md:w-auto"
+                  disabled={!configurationExamId || !configurationClassId || isSavingConfiguration}
+                >
+                  {isSavingConfiguration ? "Saving..." : "Save Configuration"}
+                </PrimaryButton>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+
+      {setupError ? (
+        <div className="rounded-xl border border-warning/20 bg-warning/5 p-4 text-sm text-warning-dark">{setupError}</div>
+      ) : null}
+    </div>
   );
 }

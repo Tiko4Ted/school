@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ButtonLink } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type SchoolClass = {
   id: string;
@@ -37,65 +38,62 @@ export function ClassesTable() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#eff6ff_0%,#f8fafc_42%,#ffffff_100%)] px-6 py-10 text-slate-900">
-      <section className="mx-auto max-w-6xl">
-        <Card className="border-slate-200 bg-white/95">
-          <CardHeader className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-700">Admin Classes</p>
-              <CardTitle className="text-3xl">Classes</CardTitle>
-              <CardDescription className="text-base">
-                Manage class names, levels, stream behavior, and progression links.
-              </CardDescription>
-            </div>
-            <ButtonLink href="/admin/classes/new">Create Class</ButtonLink>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? <p className="text-sm text-slate-600">Loading classes...</p> : null}
-            {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-            {!isLoading && !error ? (
-              <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                <table className="min-w-full divide-y divide-slate-200 text-sm">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Name</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Level</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Streams</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Next Class</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 bg-white">
-                    {classes.map((schoolClass) => (
-                      <tr key={schoolClass.id}>
-                        <td className="px-4 py-3 text-slate-900">{schoolClass.name}</td>
-                        <td className="px-4 py-3 text-slate-700">{schoolClass.level}</td>
-                        <td className="px-4 py-3 text-slate-700">{schoolClass.hasStreams ? "Enabled" : "Disabled"}</td>
-                        <td className="px-4 py-3 text-slate-700">{schoolClass.nextClass?.name ?? "None"}</td>
-                        <td className="px-4 py-3">
-                          <Link
-                            href={`/admin/classes/${schoolClass.id}`}
-                            className="inline-flex items-center rounded-xl border border-slate-300 px-3 py-2 font-medium text-slate-900 transition hover:bg-slate-50"
-                          >
-                            Edit
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                    {classes.length === 0 ? (
-                      <tr>
-                        <td className="px-4 py-6 text-slate-600" colSpan={5}>
-                          No classes found.
-                        </td>
-                      </tr>
-                    ) : null}
-                  </tbody>
-                </table>
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-      </section>
-    </main>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-1">
+            <CardTitle>Classes</CardTitle>
+            <CardDescription>
+              Manage class names, levels, stream behavior, and progression links.
+            </CardDescription>
+          </div>
+          <ButtonLink href="/admin/classes/new" variant="primary">
+            Create Class
+          </ButtonLink>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? <p className="text-sm text-text-secondary">Loading classes...</p> : null}
+          {error ? <p className="text-sm text-error">{error}</p> : null}
+          {!isLoading && !error ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Level</TableHead>
+                  <TableHead>Streams</TableHead>
+                  <TableHead>Next Class</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {classes.map((schoolClass) => (
+                  <TableRow key={schoolClass.id}>
+                    <TableCell className="font-medium text-text-primary">{schoolClass.name}</TableCell>
+                    <TableCell>{schoolClass.level}</TableCell>
+                    <TableCell>{schoolClass.hasStreams ? "Enabled" : "Disabled"}</TableCell>
+                    <TableCell>{schoolClass.nextClass?.name ?? "None"}</TableCell>
+                    <TableCell>
+                      <ButtonLink
+                        href={`/admin/classes/${schoolClass.id}`}
+                        variant="outline"
+                      >
+                        Edit
+                      </ButtonLink>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {classes.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="h-24 text-center">
+                      No classes found.
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+          ) : null}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

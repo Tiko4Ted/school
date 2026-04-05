@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ButtonLink } from "@/components/ui/button";
+import { Button, ButtonLink, PrimaryButton } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { FormField } from "@/components/ui/form-field";
+import { Select } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type Subject = {
   id: string;
@@ -41,12 +44,6 @@ export function ClassSubjectsManager({ classId, className, allSubjects }: Props)
 
     const rows = payload?.data ?? [];
     setClassSubjects(rows);
-    setSelectedSubjectId((current) => {
-      if (current && !rows.some((row) => row.subjectId === current)) {
-        return current;
-      }
-      return current;
-    });
     setError(null);
     setIsLoading(false);
   }
@@ -106,23 +103,21 @@ export function ClassSubjectsManager({ classId, className, allSubjects }: Props)
   }
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#eff6ff_0%,#f8fafc_42%,#ffffff_100%)] px-6 py-10 text-slate-900">
-      <section className="mx-auto max-w-5xl space-y-6">
-        <Card className="border-slate-200 bg-white/95">
-          <CardHeader className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-700">Class Subjects</p>
-              <CardTitle className="text-3xl">{className}</CardTitle>
-              <CardDescription className="text-base">
-                Map school-wide subjects to this class.
-              </CardDescription>
-            </div>
-            <ButtonLink href={`/admin/classes/${classId}`}>Back to Class</ButtonLink>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <form className="flex flex-col gap-3 md:flex-row" onSubmit={handleAddSubject}>
-              <select
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500"
+    <div className="space-y-6">
+      <Card>
+        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div className="space-y-1">
+            <CardTitle>{className} - Subjects</CardTitle>
+            <CardDescription>
+              Map school-wide subjects to this class.
+            </CardDescription>
+          </div>
+          <ButtonLink href={`/admin/classes/${classId}`} variant="outline">Back to Class</ButtonLink>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <form className="flex flex-col gap-4 md:flex-row md:items-end" onSubmit={handleAddSubject}>
+            <FormField label="Subject" className="flex-1">
+              <Select
                 value={selectedSubjectId}
                 onChange={(event) => setSelectedSubjectId(event.target.value)}
               >
@@ -132,64 +127,63 @@ export function ClassSubjectsManager({ classId, className, allSubjects }: Props)
                     {subject.name} ({subject.code})
                   </option>
                 ))}
-              </select>
-              <button
-                type="submit"
-                disabled={isSubmitting || availableSubjects.length === 0}
-                className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {isSubmitting ? "Adding..." : "Add Subject"}
-              </button>
-            </form>
+              </Select>
+            </FormField>
+            <PrimaryButton
+              type="submit"
+              disabled={isSubmitting || availableSubjects.length === 0}
+            >
+              {isSubmitting ? "Adding..." : "Add Subject"}
+            </PrimaryButton>
+          </form>
 
-            {error ? (
-              <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                {error}
-              </div>
-            ) : null}
+          {error ? (
+            <div className="rounded-xl border border-error/20 bg-error/5 p-4 text-sm text-error">
+              {error}
+            </div>
+          ) : null}
 
-            {isLoading ? <p className="text-sm text-slate-600">Loading class subjects...</p> : null}
-
-            {!isLoading ? (
-              <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                <table className="min-w-full divide-y divide-slate-200 text-sm">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Subject</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Code</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 bg-white">
-                    {classSubjects.map((row) => (
-                      <tr key={row.id}>
-                        <td className="px-4 py-3 text-slate-900">{row.subject.name}</td>
-                        <td className="px-4 py-3 font-medium text-slate-700">{row.subject.code}</td>
-                        <td className="px-4 py-3">
-                          <button
-                            type="button"
-                            onClick={() => void handleRemove(row.id)}
-                            className="inline-flex items-center rounded-xl border border-rose-300 px-3 py-2 font-medium text-rose-700 transition hover:bg-rose-50"
-                          >
-                            Remove
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {classSubjects.length === 0 ? (
-                      <tr>
-                        <td className="px-4 py-6 text-slate-600" colSpan={3}>
-                          No subjects mapped to this class.
-                        </td>
-                      </tr>
-                    ) : null}
-                  </tbody>
-                </table>
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-      </section>
-    </main>
+          {isLoading ? (
+            <p className="py-8 text-center text-sm text-text-secondary">Loading class subjects...</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Subject</TableHead>
+                  <TableHead>Code</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {classSubjects.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell className="font-medium text-text-primary">{row.subject.name}</TableCell>
+                    <TableCell>{row.subject.code}</TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void handleRemove(row.id)}
+                        className="text-error hover:bg-error/5 hover:text-error border-error/20"
+                      >
+                        Remove
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {classSubjects.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3} className="py-12 text-center text-text-secondary">
+                      No subjects mapped to this class.
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
+

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ButtonLink } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type AcademicYear = {
   id: string;
@@ -42,67 +43,64 @@ export function AcademicYearsTable() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#eff6ff_0%,#f8fafc_42%,#ffffff_100%)] px-6 py-10 text-slate-900">
-      <section className="mx-auto max-w-6xl">
-        <Card className="border-slate-200 bg-white/95">
-          <CardHeader className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-700">Academic Years</p>
-              <CardTitle className="text-3xl">Academic Years</CardTitle>
-              <CardDescription className="text-base">
-                Manage academic years and drill into term setup for each one.
-              </CardDescription>
-            </div>
-            <ButtonLink href="/admin/academicyears/new">Create Academic Year</ButtonLink>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? <p className="text-sm text-slate-600">Loading academic years...</p> : null}
-            {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-            {!isLoading && !error ? (
-              <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                <table className="min-w-full divide-y divide-slate-200 text-sm">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Name</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Start</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">End</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Active</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Terms</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 bg-white">
-                    {academicYears.map((year) => (
-                      <tr key={year.id}>
-                        <td className="px-4 py-3 text-slate-900">{year.name}</td>
-                        <td className="px-4 py-3 text-slate-700">{formatDate(year.startDate)}</td>
-                        <td className="px-4 py-3 text-slate-700">{formatDate(year.endDate)}</td>
-                        <td className="px-4 py-3 text-slate-700">{year.isActive ? "Yes" : "No"}</td>
-                        <td className="px-4 py-3 text-slate-700">{year.terms.length}</td>
-                        <td className="px-4 py-3">
-                          <Link
-                            href={`/admin/academicyears/${year.id}/terms`}
-                            className="inline-flex items-center rounded-xl border border-slate-300 px-3 py-2 font-medium text-slate-900 transition hover:bg-slate-50"
-                          >
-                            Manage Terms
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                    {academicYears.length === 0 ? (
-                      <tr>
-                        <td className="px-4 py-6 text-slate-600" colSpan={6}>
-                          No academic years found.
-                        </td>
-                      </tr>
-                    ) : null}
-                  </tbody>
-                </table>
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-      </section>
-    </main>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-1">
+            <CardTitle>Academic Years</CardTitle>
+            <CardDescription>
+              Manage academic years and drill into term setup for each one.
+            </CardDescription>
+          </div>
+          <ButtonLink href="/admin/academicyears/new" variant="primary">
+            Create Academic Year
+          </ButtonLink>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? <p className="text-sm text-text-secondary">Loading academic years...</p> : null}
+          {error ? <p className="text-sm text-error">{error}</p> : null}
+          {!isLoading && !error ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Start</TableHead>
+                  <TableHead>End</TableHead>
+                  <TableHead>Active</TableHead>
+                  <TableHead>Terms</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {academicYears.map((year) => (
+                  <TableRow key={year.id}>
+                    <TableCell className="font-medium text-text-primary">{year.name}</TableCell>
+                    <TableCell>{formatDate(year.startDate)}</TableCell>
+                    <TableCell>{formatDate(year.endDate)}</TableCell>
+                    <TableCell>{year.isActive ? "Yes" : "No"}</TableCell>
+                    <TableCell>{year.terms.length}</TableCell>
+                    <TableCell>
+                      <ButtonLink
+                        href={`/admin/academicyears/${year.id}/terms`}
+                        variant="outline"
+                      >
+                        Manage Terms
+                      </ButtonLink>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {academicYears.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-24 text-center">
+                      No academic years found.
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+          ) : null}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

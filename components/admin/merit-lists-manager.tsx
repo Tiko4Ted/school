@@ -3,7 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { generateMeritListAction } from "@/app/admin/merit/actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ButtonLink } from "@/components/ui/button";
+import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button, PrimaryButton, ButtonLink } from "@/components/ui/button";
 import { z } from "zod";
 
 type SetupClass = {
@@ -182,240 +186,384 @@ export function MeritListsManager() {
   const streamOptions = currentClass?.streams ?? [];
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#eef2ff_0%,#f8fafc_42%,#ffffff_100%)] px-6 py-10 text-slate-900">
-      <section className="mx-auto max-w-6xl space-y-8">
-        <Card className="border-indigo-100 bg-white/95">
-          <CardHeader>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-indigo-600">Merit Lists</p>
-            <CardTitle className="text-3xl">Class performance rankings</CardTitle>
-            <CardDescription className="text-base">
-              Filter by class and exam, regenerate competition rankings, and export PDFs for circulation.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {isLoadingOptions ? <p className="text-sm text-slate-600">Loading classes and exams…</p> : null}
-            {optionsError ? <p className="text-sm text-rose-600">{optionsError}</p> : null}
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700" htmlFor="class-select">
-                  Class
-                </label>
-                <select
-                  id="class-select"
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-indigo-500"
-                  value={selectedClassId}
-                  onChange={(event) => {
-                    setSelectedClassId(event.target.value);
-                    setMeritList(null);
-                    setMeritError(null);
-                    setSelectionError(null);
-                  }}
-                >
-                  <option value="">Select class</option>
-                  {classes
-                    .slice()
-                    .sort((a, b) => a.level - b.level)
-                    .map((cls) => (
-                      <option key={cls.id} value={cls.id}>
-                        {cls.name}
-                      </option>
-                    ))}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700" htmlFor="exam-select">
-                  Exam
-                </label>
-                <select
-                  id="exam-select"
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-indigo-500"
-                  value={selectedExamId}
-                  onChange={(event) => {
-                    setSelectedExamId(event.target.value);
-                    setMeritList(null);
-                    setMeritError(null);
-                    setSelectionError(null);
-                  }}
-                >
-                  <option value="">Select exam</option>
-                  {exams.map((exam) => (
-                    <option key={exam.id} value={exam.id}>
-                      {exam.name} ({exam.term.name})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => void fetchMeritList()}
-                disabled={!selectionValid}
-                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-900 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                Fetch merit list
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleGenerate()}
-                className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
-                disabled={!selectionValid}
-              >
-                Regenerate
-              </button>
-              {pdfLink ? (
-                <ButtonLink href={pdfLink} variant="outline">
-                  Export PDF
-                </ButtonLink>
-              ) : null}
-            </div>
-            {meritError ? <p className="text-sm text-rose-600">{meritError}</p> : null}
-            {successMessage ? <p className="text-sm text-emerald-600">{successMessage}</p> : null}
-            {selectionError ? <p className="text-sm text-rose-600">{selectionError}</p> : null}
-          </CardContent>
-        </Card>
-
-        {isLoadingMerit ? <p className="text-sm text-slate-600">Loading merit list…</p> : null}
-
-        {meritList ? (
-          <div className="space-y-6">
-            <Card className="border-indigo-100 bg-white/95">
-              <CardHeader>
-                <CardTitle className="text-2xl">
-                  {meritList.class.name} – {meritList.exam.name}
-                </CardTitle>
-                <CardDescription className="text-base">
-                  Generated {new Date(meritList.generatedAt).toLocaleString()} • {filteredEntries.length} rows shown
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <label className="text-sm text-slate-700">
-                    Stream filter
-                    <select
-                      className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-2 outline-none focus:border-indigo-500"
-                      value={streamFilter}
-                      onChange={(event) => setStreamFilter(event.target.value)}
-                    >
-                      <option value="all">All streams</option>
-                      {streamOptions.map((stream) => (
-                        <option key={stream.id} value={stream.id}>
-                          {stream.name}
+    <div className="space-y-10">
+      {/* Search & Filter Header */}
+      <Card className="border-none shadow-soft overflow-visible">
+        <CardContent className="p-8">
+          <div className="flex flex-col gap-8 lg:flex-row lg:items-end">
+            <div className="flex-1">
+              <h2 className="text-2xl font-extrabold tracking-tight text-text-primary dark:text-text-primary-dark mb-1">Merit & Rankings</h2>
+              <p className="text-text-secondary dark:text-text-secondary-dark text-sm mb-6">Select parameters to view or generate competition rankings.</p>
+              
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-2">
+                <FormField label="Class Selection">
+                  <Select
+                    value={selectedClassId}
+                    onChange={(event) => {
+                      setSelectedClassId(event.target.value);
+                      setMeritList(null);
+                      setMeritError(null);
+                      setSelectionError(null);
+                    }}
+                    className="h-11"
+                  >
+                    <option value="">Choose a class...</option>
+                    {classes
+                      .slice()
+                      .sort((a, b) => a.level - b.level)
+                      .map((cls) => (
+                        <option key={cls.id} value={cls.id}>
+                          {cls.name}
                         </option>
                       ))}
-                    </select>
-                  </label>
-                  <label className="text-sm text-slate-700">
-                    Search
-                    <input
-                      className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-2 outline-none focus:border-indigo-500"
-                      value={search}
-                      onChange={(event) => setSearch(event.target.value)}
-                      placeholder="Admission or name"
-                    />
-                  </label>
+                  </Select>
+                </FormField>
+
+                <FormField label="Exam Period">
+                  <Select
+                    value={selectedExamId}
+                    onChange={(event) => {
+                      setSelectedExamId(event.target.value);
+                      setMeritList(null);
+                      setMeritError(null);
+                      setSelectionError(null);
+                    }}
+                    className="h-11"
+                  >
+                    <option value="">Choose an exam...</option>
+                    {exams.map((exam) => (
+                      <option key={exam.id} value={exam.id}>
+                        {exam.name} ({exam.term.name})
+                      </option>
+                    ))}
+                  </Select>
+                </FormField>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 lg:pb-1">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void fetchMeritList()}
+                disabled={!selectionValid || isLoadingMerit}
+                className="h-11 px-6 font-bold uppercase tracking-wider text-xs"
+              >
+                {isLoadingMerit ? "Loading..." : "View Rankings"}
+              </Button>
+              <PrimaryButton
+                type="button"
+                onClick={() => void handleGenerate()}
+                disabled={!selectionValid}
+                className="h-11 px-6 font-bold uppercase tracking-wider text-xs"
+              >
+                Generate Fresh
+              </PrimaryButton>
+              {pdfLink && (
+                <ButtonLink href={pdfLink} variant="outline" className="h-11 px-6 font-bold uppercase tracking-wider text-xs border-secondary text-secondary hover:bg-secondary-light/30">
+                  Export PDF
+                </ButtonLink>
+              )}
+            </div>
+          </div>
+
+          {(meritError || selectionError) && (
+            <div className="mt-6 rounded-xl border border-error/20 bg-error/5 p-4 text-sm font-medium text-error">
+              {meritError || selectionError}
+            </div>
+          )}
+          {successMessage && (
+            <div className="mt-6 rounded-xl border border-secondary/20 bg-secondary-light/30 p-4 text-sm font-medium text-secondary">
+              {successMessage}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {meritList ? (
+        <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {/* Top Gender Performers */}
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card className="border-none shadow-soft overflow-hidden">
+              <CardHeader className="bg-primary/5 dark:bg-primary/10 border-b border-border-subtle dark:border-border-dark py-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-primary flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-primary animate-pulse"></span>
+                    Top Girls
+                  </CardTitle>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/60">Top 5</span>
                 </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded-2xl border border-slate-200 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Top girls</p>
-                    <ul className="mt-3 space-y-2 text-sm text-slate-700">
-                      {meritList.topGirls.length ? (
-                        meritList.topGirls.map((girl) => (
-                          <li key={girl.studentId}>
-                            {girl.studentName} – {girl.score.toFixed(2)}
-                          </li>
-                        ))
-                      ) : (
-                        <li>No data</li>
-                      )}
-                    </ul>
-                  </div>
-                  <div className="rounded-2xl border border-slate-200 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Top boys</p>
-                    <ul className="mt-3 space-y-2 text-sm text-slate-700">
-                      {meritList.topBoys.length ? (
-                        meritList.topBoys.map((boy) => (
-                          <li key={boy.studentId}>
-                            {boy.studentName} – {boy.score.toFixed(2)}
-                          </li>
-                        ))
-                      ) : (
-                        <li>No data</li>
-                      )}
-                    </ul>
-                  </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableBody>
+                    {meritList.topGirls.length ? (
+                      meritList.topGirls.map((girl, idx) => (
+                        <TableRow key={girl.studentId} className="group">
+                          <TableCell className="w-12 text-center">
+                            <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-black ${idx === 0 ? "bg-accent text-white" : "bg-primary-light/50 text-primary"}`}>
+                              {idx + 1}
+                            </span>
+                          </TableCell>
+                          <TableCell className="font-bold text-text-primary dark:text-text-primary-dark group-hover:text-primary transition-colors">{girl.studentName}</TableCell>
+                          <TableCell className="text-right">
+                            <span className="rounded-lg bg-background dark:bg-background-dark px-2.5 py-1 text-sm font-black text-primary border border-border-subtle dark:border-border-dark">
+                              {girl.score.toFixed(2)}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={3} className="py-12 text-center text-text-secondary italic">No data recorded</TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-soft overflow-hidden">
+              <CardHeader className="bg-secondary/5 dark:bg-secondary/10 border-b border-border-subtle dark:border-border-dark py-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-secondary flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-secondary animate-pulse"></span>
+                    Top Boys
+                  </CardTitle>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/60">Top 5</span>
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-700">Subject champions</p>
-                  <div className="mt-3 overflow-x-auto rounded-2xl border border-slate-200">
-                    <table className="min-w-full divide-y divide-slate-200 text-sm">
-                      <thead className="bg-slate-50">
-                        <tr>
-                          <th className="px-3 py-2 text-left text-slate-600">Subject</th>
-                          <th className="px-3 py-2 text-left text-slate-600">Student</th>
-                          <th className="px-3 py-2 text-left text-slate-600">Score</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200 bg-white">
-                        {meritList.subjectChampions.map((champion) => (
-                          <tr key={champion.id}>
-                            <td className="px-3 py-2 text-slate-900">
-                              {champion.subject.name} ({champion.subject.code})
-                            </td>
-                            <td className="px-3 py-2 text-slate-700">
-                              {champion.student.admissionNumber} – {champion.student.firstName} {champion.student.lastName}
-                            </td>
-                            <td className="px-3 py-2 text-slate-700">{Number(champion.score).toFixed(2)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                  <table className="min-w-full divide-y divide-slate-200 text-sm">
-                    <thead className="bg-slate-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left font-semibold text-slate-600">Class Rank</th>
-                        <th className="px-4 py-3 text-left font-semibold text-slate-600">Stream Rank</th>
-                        <th className="px-4 py-3 text-left font-semibold text-slate-600">Student</th>
-                        <th className="px-4 py-3 text-left font-semibold text-slate-600">Stream</th>
-                        <th className="px-4 py-3 text-left font-semibold text-slate-600">Total</th>
-                        <th className="px-4 py-3 text-left font-semibold text-slate-600">Average</th>
-                        <th className="px-4 py-3 text-left font-semibold text-slate-600">Improvement</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200 bg-white">
-                      {filteredEntries.map((entry) => (
-                        <tr key={entry.id}>
-                          <td className="px-4 py-3 text-slate-900">{entry.classRank}</td>
-                          <td className="px-4 py-3 text-slate-700">{entry.streamRank}</td>
-                          <td className="px-4 py-3 text-slate-900">
-                            {entry.student.admissionNumber} – {entry.student.firstName} {entry.student.lastName}
-                          </td>
-                          <td className="px-4 py-3 text-slate-700">{entry.stream.name}</td>
-                          <td className="px-4 py-3 text-slate-700">{entry.totalScore.toFixed(2)}</td>
-                          <td className="px-4 py-3 text-slate-700">{entry.averageScore.toFixed(2)}</td>
-                          <td className="px-4 py-3 text-slate-700">
-                            {entry.improvement == null ? "—" : entry.improvement.toFixed(2)}
-                          </td>
-                        </tr>
-                      ))}
-                      {filteredEntries.length === 0 ? (
-                        <tr>
-                          <td className="px-4 py-6 text-slate-600" colSpan={7}>
-                            No entries match the selected filters.
-                          </td>
-                        </tr>
-                      ) : null}
-                    </tbody>
-                  </table>
-                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableBody>
+                    {meritList.topBoys.length ? (
+                      meritList.topBoys.map((boy, idx) => (
+                        <TableRow key={boy.studentId} className="group">
+                          <TableCell className="w-12 text-center">
+                            <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-black ${idx === 0 ? "bg-accent text-white" : "bg-secondary-light/50 text-secondary"}`}>
+                              {idx + 1}
+                            </span>
+                          </TableCell>
+                          <TableCell className="font-bold text-text-primary dark:text-text-primary-dark group-hover:text-secondary transition-colors">{boy.studentName}</TableCell>
+                          <TableCell className="text-right">
+                            <span className="rounded-lg bg-background dark:bg-background-dark px-2.5 py-1 text-sm font-black text-secondary border border-border-subtle dark:border-border-dark">
+                              {boy.score.toFixed(2)}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={3} className="py-12 text-center text-text-secondary italic">No data recorded</TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           </div>
-        ) : null}
-      </section>
-    </main>
+
+          {/* Subject Champions */}
+          <Card className="border-none shadow-soft overflow-hidden">
+            <CardHeader className="border-b border-border-subtle dark:border-border-dark bg-background/50">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 flex items-center justify-center rounded-2xl bg-accent-light/50 text-accent">
+                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                </div>
+                <div>
+                  <CardTitle className="text-xl">Subject Champions</CardTitle>
+                  <CardDescription>Best performers per subject in {meritList.class.name}</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-background/80 dark:bg-background-dark/80">
+                    <TableHead className="py-4">Subject</TableHead>
+                    <TableHead className="py-4">Student Identity</TableHead>
+                    <TableHead className="py-4 text-right">Champion Score</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {meritList.subjectChampions.map((champion) => (
+                    <TableRow key={champion.id} className="hover:bg-primary-light/5 transition-colors">
+                      <TableCell className="font-black text-primary dark:text-primary-light py-5">
+                        <span className="bg-primary-light/20 px-3 py-1.5 rounded-xl border border-primary-light/30">
+                          {champion.subject.name}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-5">
+                        <div className="flex items-center gap-3">
+                          <div className="h-9 w-9 flex items-center justify-center rounded-full bg-background dark:bg-background-dark border border-border-subtle dark:border-border-dark text-[10px] font-bold text-text-secondary">
+                            {champion.student.admissionNumber}
+                          </div>
+                          <span className="font-extrabold text-text-primary dark:text-text-primary-dark">
+                            {champion.student.firstName} {champion.student.lastName}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right py-5">
+                        <span className="text-xl font-black text-accent tracking-tighter">
+                          {Number(champion.score).toFixed(2)}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {meritList.subjectChampions.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={3} className="py-20 text-center text-text-secondary italic">
+                        Processing subject data...
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          {/* Detailed Merit Table */}
+          <Card className="border-none shadow-soft overflow-hidden">
+            <CardHeader className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between border-b border-border-subtle dark:border-border-dark bg-background/50 p-8">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-2xl font-black tracking-tight text-text-primary dark:text-text-primary-dark">{meritList.class.name} Full Ranking</h3>
+                  <span className="bg-secondary/10 text-secondary text-[10px] font-black uppercase px-2 py-0.5 rounded-lg border border-secondary/20 tracking-widest">Official</span>
+                </div>
+                <CardDescription className="flex items-center gap-4">
+                  <span>Entries: <strong className="text-text-primary dark:text-text-primary-dark">{meritList.entries.length}</strong></span>
+                  <span className="h-1 w-1 rounded-full bg-border-subtle"></span>
+                  <span>Exam: <strong className="text-text-primary dark:text-text-primary-dark">{meritList.exam.name}</strong></span>
+                </CardDescription>
+              </div>
+              
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="w-full sm:w-48">
+                  <Select
+                    value={streamFilter}
+                    onChange={(event) => setStreamFilter(event.target.value)}
+                    className="h-10 text-xs font-bold"
+                  >
+                    <option value="all">All streams</option>
+                    {streamOptions.map((stream) => (
+                      <option key={stream.id} value={stream.id}>
+                        {stream.name} Stream
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="w-full sm:w-64">
+                  <Input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Search by name or admission..."
+                    className="h-10 text-xs"
+                  />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-background/80 dark:bg-background-dark/80">
+                    <TableHead className="py-4">Rank</TableHead>
+                    <TableHead className="py-4">Stream</TableHead>
+                    <TableHead className="py-4">Student Information</TableHead>
+                    <TableHead className="py-4 text-right">Aggregate</TableHead>
+                    <TableHead className="py-4 text-right">Mean Score</TableHead>
+                    <TableHead className="py-4 text-right">VAP</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredEntries.map((entry, idx) => (
+                    <TableRow key={entry.id} className={`${idx < 3 ? "bg-primary-light/5 dark:bg-primary-light/5" : ""} group transition-colors`}>
+                      <TableCell className="py-6">
+                        <div className="flex items-center gap-4">
+                          <span className={`inline-flex h-9 w-9 items-center justify-center rounded-2xl text-xs font-black shadow-soft transition-transform group-hover:scale-110 ${
+                            entry.classRank === 1 ? "bg-accent text-white rotate-12" : 
+                            entry.classRank === 2 ? "bg-text-secondary text-white" :
+                            entry.classRank === 3 ? "bg-accent/70 text-white" :
+                            "bg-primary-light/30 text-primary"
+                          }`}>
+                            {entry.classRank}
+                          </span>
+                          <span className="text-[10px] font-bold text-text-secondary/60">Pos {entry.streamRank}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-6">
+                        <span className="text-xs font-bold uppercase tracking-widest text-text-secondary group-hover:text-primary transition-colors">
+                          {entry.stream.name}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-6">
+                        <div className="flex flex-col">
+                          <span className="font-extrabold text-text-primary dark:text-text-primary-dark leading-tight group-hover:underline decoration-primary decoration-2 underline-offset-4">
+                            {entry.student.firstName} {entry.student.lastName}
+                          </span>
+                          <span className="text-xs font-bold text-text-secondary/80 mt-1 uppercase tracking-tighter">ADM: {entry.student.admissionNumber}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right py-6">
+                        <span className="text-lg font-black text-text-primary dark:text-text-primary-dark tracking-tighter">
+                          {entry.totalScore.toFixed(2)}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right py-6">
+                        <span className="text-sm font-bold text-primary px-2.5 py-1 rounded-lg bg-primary-light/20 border border-primary-light/30">
+                          {entry.averageScore.toFixed(2)}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right py-6">
+                        {entry.improvement == null ? (
+                          <span className="text-text-secondary/40 text-xs">—</span>
+                        ) : (
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-black border ${
+                            entry.improvement > 0 ? "text-secondary border-secondary/20 bg-secondary-light/30" : 
+                            entry.improvement < 0 ? "text-error border-error/20 bg-error/10" : 
+                            "text-text-secondary border-border-subtle bg-background"
+                          }`}>
+                            {entry.improvement > 0 ? "▲" : entry.improvement < 0 ? "▼" : "•"}
+                            {Math.abs(entry.improvement).toFixed(2)}
+                          </span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {filteredEntries.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="py-32 text-center">
+                        <div className="flex flex-col items-center">
+                          <div className="h-16 w-16 rounded-full bg-background dark:bg-background-dark border border-border-subtle dark:border-border-dark flex items-center justify-center text-text-secondary mb-4">
+                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                          </div>
+                          <p className="text-text-secondary font-bold">No results match your criteria</p>
+                          <p className="text-xs text-text-secondary/60 mt-1">Try adjusting your filters or search terms</p>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+          
+          <div className="flex justify-center pb-10">
+            <p className="text-[10px] font-black uppercase tracking-[0.5em] text-text-secondary/30">
+              End of Merit List • SchoolMS Digital Report
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="py-20 flex flex-col items-center justify-center text-center">
+           <div className="h-24 w-24 rounded-3xl bg-background dark:bg-background-dark border-2 border-dashed border-border-subtle dark:border-border-dark flex items-center justify-center text-text-secondary/20 mb-6">
+             <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+           </div>
+           <h3 className="text-xl font-bold text-text-secondary">Ready to View Rankings</h3>
+           <p className="text-sm text-text-secondary/60 max-w-xs mt-2">
+             Select a class and exam above to load the performance rankings and subject champions.
+           </p>
+        </div>
+      )}
+    </div>
   );
 }

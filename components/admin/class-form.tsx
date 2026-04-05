@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { z } from "zod";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Button, PrimaryButton } from "@/components/ui/button";
 
 const formSchema = z.object({
   name: z.string().trim().min(1, "Name is required."),
@@ -109,98 +113,78 @@ export function ClassForm({
   }
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#eff6ff_0%,#f8fafc_42%,#ffffff_100%)] px-6 py-10 text-slate-900">
-      <section className="mx-auto max-w-3xl">
-        <Card className="border-slate-200 bg-white/95">
-          <CardHeader>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-700">Classes</p>
-            <CardTitle className="text-3xl">{title}</CardTitle>
-            <CardDescription className="text-base">{description}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-6" onSubmit={handleSubmit}>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700" htmlFor="name">
-                  Name
-                </label>
-                <input
-                  id="name"
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500"
-                  value={values.name}
-                  onChange={(event) => setValues((current) => ({ ...current, name: event.target.value }))}
-                />
-                {errors.name ? <p className="text-sm text-rose-600">{errors.name}</p> : null}
-              </div>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>{title}</CardTitle>
+          <CardDescription>{description}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form className="space-y-6" onSubmit={handleSubmit}>
+            <FormField label="Name" id="name" error={errors.name}>
+              <Input
+                id="name"
+                value={values.name}
+                onChange={(event) => setValues((current) => ({ ...current, name: event.target.value }))}
+                placeholder="e.g. Primary 1"
+              />
+            </FormField>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700" htmlFor="level">
-                  Level
-                </label>
-                <input
-                  id="level"
-                  type="number"
-                  min={1}
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500"
-                  value={values.level}
-                  onChange={(event) => setValues((current) => ({ ...current, level: event.target.value }))}
-                />
-                {errors.level ? <p className="text-sm text-rose-600">{errors.level}</p> : null}
-              </div>
+            <FormField label="Level" id="level" error={errors.level}>
+              <Input
+                id="level"
+                type="number"
+                min={1}
+                value={values.level}
+                onChange={(event) => setValues((current) => ({ ...current, level: event.target.value }))}
+              />
+            </FormField>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700" htmlFor="nextClassId">
-                  Next class
-                </label>
-                <select
-                  id="nextClassId"
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500"
-                  value={values.nextClassId}
-                  onChange={(event) => setValues((current) => ({ ...current, nextClassId: event.target.value }))}
-                >
-                  <option value="">None</option>
-                  {availableNextClasses.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.name} (Level {option.level})
-                    </option>
-                  ))}
-                </select>
-                {errors.nextClassId ? <p className="text-sm text-rose-600">{errors.nextClassId}</p> : null}
-              </div>
+            <FormField label="Next Class" id="nextClassId" error={errors.nextClassId}>
+              <Select
+                id="nextClassId"
+                value={values.nextClassId}
+                onChange={(event) => setValues((current) => ({ ...current, nextClassId: event.target.value }))}
+              >
+                <option value="">None</option>
+                {availableNextClasses.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.name} (Level {option.level})
+                  </option>
+                ))}
+              </Select>
+            </FormField>
 
-              <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <input
-                  type="checkbox"
-                  checked={values.hasStreams}
-                  onChange={(event) => setValues((current) => ({ ...current, hasStreams: event.target.checked }))}
-                />
-                <span className="text-sm text-slate-700">This class uses streams</span>
+            <div className="flex items-center gap-3 rounded-xl border border-border-subtle bg-background/50 p-4 dark:border-border-dark dark:bg-background-dark/50">
+              <input
+                id="hasStreams"
+                type="checkbox"
+                className="h-4 w-4 rounded border-border-subtle text-primary focus:ring-primary dark:border-border-dark"
+                checked={values.hasStreams}
+                onChange={(event) => setValues((current) => ({ ...current, hasStreams: event.target.checked }))}
+              />
+              <label htmlFor="hasStreams" className="text-sm font-medium text-text-secondary dark:text-text-secondary-dark">
+                This class uses streams
               </label>
+            </div>
 
-              {formError ? (
-                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                  {formError}
-                </div>
-              ) : null}
-
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {isSubmitting ? "Saving..." : submitLabel}
-                </button>
-                <Link
-                  href="/admin/classes"
-                  className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900 transition hover:bg-slate-50"
-                >
-                  Cancel
-                </Link>
+            {formError ? (
+              <div className="rounded-xl border border-error/20 bg-error/10 p-4 text-sm font-medium text-error">
+                {formError}
               </div>
-            </form>
-          </CardContent>
-        </Card>
-      </section>
-    </main>
+            ) : null}
+
+            <div className="flex flex-wrap gap-3">
+              <PrimaryButton type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Saving..." : submitLabel}
+              </PrimaryButton>
+              <Button type="button" variant="outline" onClick={() => router.push("/admin/classes")}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
