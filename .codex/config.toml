@@ -1,0 +1,10 @@
+model = "gpt-5-codex"
+
+approval_mode = "auto"
+sandbox_mode = "danger-full-access"
+
+context_files = ["AGENTS.md", "SPEC.md"]
+
+temperature = 0.1
+verbosity = "low"
+explain_changes = true

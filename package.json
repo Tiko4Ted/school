@@ -1,0 +1,50 @@
+{
+  "name": "schoolms",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "vitest run",
+    "db:start": "docker compose up -d db",
+    "db:stop": "docker compose stop db",
+    "prisma:generate": "prisma generate",
+    "prisma:validate": "prisma validate",
+    "prisma:connect": "prisma db execute --schema prisma/schema.prisma --stdin",
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.6.0",
+    "bcryptjs": "^3.0.3",
+    "next": "^14.2.35",
+    "next-auth": "^4.24.13",
+    "papaparse": "^5.5.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "xlsx": "^0.18.5",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.2",
+    "@types/node": "^25.5.2",
+    "@types/papaparse": "^5.5.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/supertest": "^6.0.3",
+    "autoprefixer": "^10.4.27",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.35",
+    "postcss": "^8.5.8",
+    "prisma": "^6.6.0",
+    "supertest": "^7.0.0",
+    "tailwindcss": "^4.2.2",
+    "testcontainers": "^10.10.3",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2",
+    "vitest": "^1.6.0"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}

@@ -1,0 +1,398 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum StudentStatus {
+  ACTIVE
+  PROMOTED
+  GRADUATED
+  TRANSFERRED
+}
+
+enum ReportStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model User {
+  id           String                  @id @default(uuid())
+  email        String                  @unique
+  passwordHash String
+  role         Role                    @default(TEACHER)
+  createdAt    DateTime                @default(now())
+  teacher      Teacher?
+  createdMarks Mark[]                  @relation("MarkCreatedBy")
+  updatedMarks Mark[]                  @relation("MarkUpdatedBy")
+  reviewedMarkReviews MarkReview[]     @relation("MarkReviewReviewedBy")
+  createdReports PublishedReport[]     @relation("PublishedReportCreatedBy")
+  updatedReports PublishedReport[]     @relation("PublishedReportUpdatedBy")
+}
+
+model School {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AcademicYear {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  terms     Term[]
+}
+
+model Term {
+  id             String       @id @default(uuid())
+  academicYearId String
+  name           String
+  startDate      DateTime
+  endDate        DateTime
+  isActive       Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  exams          Exam[]
+  reports        PublishedReport[]
+
+  @@unique([academicYearId, name])
+}
+
+model Class {
+  id              String               @id @default(uuid())
+  name            String               @unique
+  level           Int                  @unique
+  hasStreams      Boolean              @default(true)
+  nextClassId     String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  nextClass       Class?               @relation("ClassProgression", fields: [nextClassId], references: [id], onDelete: SetNull)
+  previousClasses Class[]              @relation("ClassProgression")
+  streams         Stream[]
+  classSubjects   ClassSubject[]
+  students        Student[]
+  studentHistory  StudentStreamHistory[]
+  exams           ExamConfiguration[]
+  meritLists      MeritList[]
+  reports         PublishedReport[]
+}
+
+model Stream {
+  id                    String                 @id @default(uuid())
+  classId               String
+  name                  String
+  isDefault             Boolean                @default(false)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  class                 Class                  @relation(fields: [classId], references: [id], onDelete: Restrict)
+  students              Student[]
+  studentHistory        StudentStreamHistory[]
+  teacherAssignments    TeacherStreamSubject[]
+  classTeacherAssignments ClassTeacherAssignment[]
+  marks                 Mark[]
+  markReviews           MarkReview[]
+  meritListEntries      MeritListEntry[]
+  fromPromotionMappings StreamPromotionMap[]   @relation("StreamPromotionFrom")
+  toPromotionMappings   StreamPromotionMap[]   @relation("StreamPromotionTo")
+
+  @@unique([classId, name])
+}
+
+model StreamPromotionMap {
+  id           String   @id @default(uuid())
+  fromStreamId String   @unique
+  toStreamId   String
+  createdAt    DateTime @default(now())
+  fromStream   Stream   @relation("StreamPromotionFrom", fields: [fromStreamId], references: [id], onDelete: Cascade)
+  toStream     Stream   @relation("StreamPromotionTo", fields: [toStreamId], references: [id], onDelete: Restrict)
+}
+
+model Subject {
+  id                 String                 @id @default(uuid())
+  name               String
+  code               String                 @unique
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  classSubjects      ClassSubject[]
+  teacherAssignments TeacherStreamSubject[]
+  examConfigurations ExamConfiguration[]
+  marks              Mark[]
+  markReviews        MarkReview[]
+  meritListEntries   MeritListSubjectChampion[]
+
+  @@unique([name, code])
+}
+
+model ClassSubject {
+  id        String   @id @default(uuid())
+  classId   String
+  subjectId String
+  createdAt DateTime @default(now())
+  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+
+  @@unique([classId, subjectId])
+}
+
+model Teacher {
+  id                    String                  @id @default(uuid())
+  userId                String                  @unique
+  employeeNumber        String                  @unique
+  firstName             String
+  lastName              String
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  user                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  streamSubjectAssignments TeacherStreamSubject[]
+  classTeacherAssignments   ClassTeacherAssignment[]
+}
+
+model TeacherStreamSubject {
+  id        String   @id @default(uuid())
+  teacherId String
+  streamId  String
+  subjectId String
+  createdAt DateTime @default(now())
+  teacher   Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  stream    Stream   @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, streamId, subjectId])
+}
+
+model ClassTeacherAssignment {
+  id         String    @id @default(uuid())
+  teacherId  String
+  streamId   String
+  startDate  DateTime
+  endDate    DateTime?
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  teacher    Teacher   @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+  stream     Stream    @relation(fields: [streamId], references: [id], onDelete: Restrict)
+
+  @@index([streamId, isActive])
+  @@index([teacherId, isActive])
+}
+
+model Student {
+  id               String                @id @default(uuid())
+  admissionNumber  String                @unique
+  firstName        String
+  lastName         String
+  gender           Gender
+  dateOfBirth      DateTime
+  status           StudentStatus         @default(ACTIVE)
+  currentClassId   String
+  currentStreamId  String
+  destinationSchool String?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  currentClass     Class                 @relation(fields: [currentClassId], references: [id], onDelete: Restrict)
+  currentStream    Stream                @relation(fields: [currentStreamId], references: [id], onDelete: Restrict)
+  streamHistory    StudentStreamHistory[]
+  marks            Mark[]
+  meritListEntries MeritListEntry[]
+  meritSubjectChampions MeritListSubjectChampion[]
+  remarks          StudentRemark[]
+
+  @@index([currentClassId, currentStreamId, status])
+}
+
+model StudentStreamHistory {
+  id                String        @id @default(uuid())
+  studentId         String
+  classId           String
+  streamId          String
+  status            StudentStatus
+  effectiveFrom     DateTime
+  effectiveTo       DateTime?
+  destinationSchool String?
+  createdAt         DateTime      @default(now())
+  student           Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  class             Class         @relation(fields: [classId], references: [id], onDelete: Restrict)
+  stream            Stream        @relation(fields: [streamId], references: [id], onDelete: Restrict)
+
+  @@index([studentId, effectiveFrom])
+}
+
+model Exam {
+  id             String              @id @default(uuid())
+  termId         String
+  name           String
+  startDate      DateTime
+  endDate        DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  term           Term                @relation(fields: [termId], references: [id], onDelete: Restrict)
+  configurations ExamConfiguration[]
+  marks          Mark[]
+  markReviews    MarkReview[]
+  meritLists     MeritList[]
+  reportExams    ReportExam[]
+
+  @@unique([termId, name])
+}
+
+model ExamConfiguration {
+  id        String   @id @default(uuid())
+  examId    String
+  classId   String
+  subjectId String
+  createdAt DateTime @default(now())
+  exam      Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, classId, subjectId])
+}
+
+model Mark {
+  id          String    @id @default(uuid())
+  examId      String
+  studentId   String
+  subjectId   String
+  streamId    String
+  score       Decimal   @db.Decimal(5, 2)
+  createdById String
+  updatedById String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  exam        Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject     Subject   @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  stream      Stream    @relation(fields: [streamId], references: [id], onDelete: Restrict)
+  createdBy   User      @relation("MarkCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy   User      @relation("MarkUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+
+  @@unique([examId, studentId, subjectId])
+  @@index([examId, streamId, subjectId])
+}
+
+model MarkReview {
+  id           String   @id @default(uuid())
+  examId       String
+  streamId     String
+  subjectId    String
+  reviewedById String
+  reviewedAt   DateTime @default(now())
+  exam         Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  stream       Stream   @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  subject      Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  reviewedBy   User     @relation("MarkReviewReviewedBy", fields: [reviewedById], references: [id], onDelete: Restrict)
+
+  @@unique([examId, streamId, subjectId])
+}
+
+model MeritList {
+  id                String                    @id @default(uuid())
+  examId            String
+  classId           String
+  generatedAt       DateTime                  @default(now())
+  entries           MeritListEntry[]
+  subjectChampions  MeritListSubjectChampion[]
+  exam              Exam                      @relation(fields: [examId], references: [id], onDelete: Cascade)
+  class             Class                     @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, classId])
+}
+
+model MeritListEntry {
+  id              String      @id @default(uuid())
+  meritListId     String
+  studentId       String
+  streamId        String
+  totalScore      Decimal     @db.Decimal(7, 2)
+  averageScore    Decimal     @db.Decimal(7, 2)
+  classRank       Int
+  streamRank      Int
+  improvement     Decimal?    @db.Decimal(7, 2)
+  createdAt       DateTime    @default(now())
+  meritList       MeritList   @relation(fields: [meritListId], references: [id], onDelete: Cascade)
+  student         Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  stream          Stream      @relation(fields: [streamId], references: [id], onDelete: Restrict)
+
+  @@unique([meritListId, studentId])
+  @@index([meritListId, classRank])
+  @@index([meritListId, streamRank])
+}
+
+model MeritListSubjectChampion {
+  id          String    @id @default(uuid())
+  meritListId String
+  subjectId   String
+  studentId   String
+  score       Decimal   @db.Decimal(7, 2)
+  createdAt   DateTime  @default(now())
+  meritList   MeritList @relation(fields: [meritListId], references: [id], onDelete: Cascade)
+  subject     Subject   @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([meritListId, subjectId])
+}
+
+model PublishedReport {
+  id          String         @id @default(uuid())
+  termId       String
+  classId      String
+  status       ReportStatus  @default(DRAFT)
+  publishedAt  DateTime?
+  reopenedAt   DateTime?
+  createdById  String
+  updatedById  String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  term         Term          @relation(fields: [termId], references: [id], onDelete: Restrict)
+  class        Class         @relation(fields: [classId], references: [id], onDelete: Restrict)
+  createdBy    User          @relation("PublishedReportCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy    User          @relation("PublishedReportUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  exams        ReportExam[]
+  remarks      StudentRemark[]
+
+  @@unique([termId, classId])
+}
+
+model ReportExam {
+  id        String          @id @default(uuid())
+  reportId  String
+  examId    String
+  position  Int
+  report    PublishedReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  exam      Exam            @relation(fields: [examId], references: [id], onDelete: Restrict)
+
+  @@unique([reportId, examId])
+  @@unique([reportId, position])
+}
+
+model StudentRemark {
+  id               String          @id @default(uuid())
+  reportId         String
+  studentId        String
+  remark           String
+  classTeacherName String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  report           PublishedReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  student          Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([reportId, studentId])
+}

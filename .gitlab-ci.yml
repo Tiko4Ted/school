@@ -1,0 +1,45 @@
+stages:
+  - test
+  - docker
+
+variables:
+  NODE_VERSION: "20"
+  DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/schoolms"
+  NEXTAUTH_SECRET: "test-secret"
+  NEXTAUTH_URL: "http://localhost"
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_TLS_CERTDIR: ""
+
+cache:
+  paths:
+    - node_modules/
+
+test:
+  stage: test
+  image: node:20
+  services:
+    - name: postgres:16-alpine
+      alias: postgres
+    - name: docker:24-dind
+      alias: docker
+      command: ["--tls=false"]
+  before_script:
+    - apt-get update && apt-get install -y docker.io
+    - node --version
+    - npm --version
+  script:
+    - npm ci
+    - npx prisma migrate deploy --schema prisma/schema.prisma
+    - npm test
+
+docker-build:
+  stage: docker
+  image: docker:24
+  services:
+    - name: docker:24-dind
+      alias: docker
+      command: ["--tls=false"]
+  script:
+    - docker build -t schoolms:$CI_COMMIT_SHORT_SHA .
+  needs:
+    - test

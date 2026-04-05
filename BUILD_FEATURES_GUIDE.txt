@@ -1,0 +1,715 @@
+SchoolMS Build Features Guide
+Version: aligned to schoolms_spec_v1.md
+
+Purpose
+This guide translates the system spec into a practical build plan for a full one-school implementation.
+It covers:
+- feature-by-feature build order
+- what to implement in each stage
+- what to test in each stage
+- stage exit criteria
+- suggested prompts to use at each stage if you are working with an AI coding assistant
+
+
+1. Product Scope Summary
+
+System type:
+- exam-focused school management system
+
+Primary roles:
+- Admin
+- Teacher
+
+Core rules:
+- one-school implementation for v1
+- User.email is globally unique
+- teachers can work only in their assigned stream + subject combinations
+- teachers can overwrite their own marks before admin review
+- after admin review, only admins can edit marks
+- one active class teacher per stream
+- one teacher cannot be active class teacher for more than one stream at a time
+- ranking ties use competition ranking: 1, 1, 3
+- reports can be published, then reopened by admin if needed
+- subjects are shared school-wide
+- promotion auto-places students into a mapped/default stream, then admin may adjust later
+
+
+2. Recommended Build Order
+
+Build the system in this order:
+
+Stage 1. Project foundation
+Stage 2. Database schema and Prisma setup
+Stage 3. Authentication and authorization
+Stage 4. School setup module
+Stage 5. Teacher management and assignments
+Stage 6. Student management
+Stage 7. Student lifecycle workflows
+Stage 8. Exam management
+Stage 9. Marks entry and review
+Stage 10. Ranking and merit list engine
+Stage 11. Report publishing and remarks
+Stage 12. PDF generation
+Stage 13. QA hardening, seeds, and deployment readiness
+
+Reason for this order:
+- later modules depend on the earlier setup data
+- marks depend on exams, students, teachers, streams, and subjects
+- merit lists depend on marks
+- reports depend on merit list logic, remarks, and publishing workflow
+
+
+3. Global Engineering Rules
+
+Apply these rules across all stages:
+- keep business logic in isolated lib modules, not buried inside route handlers
+- use Prisma transactions for lifecycle actions and mark import operations
+- validate all API inputs with zod
+- use role-based guards on all admin and teacher routes
+- do not let teachers query or mutate data outside assigned stream-subject scope
+- keep bulk upload as parse -> validate preview -> commit
+- preserve history when changing stream class teacher assignments
+- prefer idempotent operations where possible
+- seed enough data to manually test every stage quickly
+
+
+4. Stage-by-Stage Guide
+
+Stage 1. Project Foundation
+
+Goal:
+Create the app skeleton and local environment.
+
+Build tasks:
+- create Next.js 14 app with App Router and TypeScript
+- install Tailwind CSS and shadcn/ui
+- add Prisma and PostgreSQL support
+- add NextAuth dependencies
+- add CSV/Excel parsing dependencies
+- add Puppeteer dependency
+- create docker-compose.yml
+- create .env.example
+- add basic folder structure from the spec
+
+Features completed in this stage:
+- app boots locally
+- database container runs
+- environment variables are documented
+- project structure is ready for feature work
+
+What to test:
+- app starts on the expected port
+- postgres container starts and remains healthy
+- environment variables load correctly
+- project builds without TypeScript errors
+
+Exit criteria:
+- docker services start successfully
+- Next.js app runs locally
+- initial lint/typecheck baseline passes
+
+Suggested prompt for this stage:
+"Set up the SchoolMS project foundation using Next.js 14 App Router with TypeScript, Tailwind, shadcn/ui, Prisma, NextAuth, PostgreSQL via Docker Compose, papaparse, xlsx, and Puppeteer. Create a clean folder structure aligned with the spec, add docker-compose.yml, .env.example, and make sure the app boots locally."
+
+
+Stage 2. Database Schema and Prisma Setup
+
+Goal:
+Implement the core data model first.
+
+Build tasks:
+- create prisma/schema.prisma
+- add all models from the spec
+- include TeacherStreamSubject
+- include ClassTeacherAssignment
+- include PublishedReport and StudentRemark
+- include MeritList and MeritListEntry
+- add enums
+- create migration
+- create seed script with:
+  admin user
+  school record
+  academic year
+  term
+  classes
+  streams
+  subjects
+  one sample teacher
+  one sample student
+
+Important schema rules:
+- Subject.code should be unique
+- User.email should be unique
+- TeacherStreamSubject must be unique by teacherId + streamId + subjectId
+- ClassTeacherAssignment should support assignment history
+- implementation should enforce one active class teacher per stream
+- implementation should enforce one teacher active on only one stream at a time
+
+What to test:
+- migration runs cleanly on empty database
+- seed runs cleanly
+- seeded relationships are valid
+- required unique constraints behave correctly
+- deleting or updating related rows does not break integrity unexpectedly
+
+Exit criteria:
+- prisma migrate succeeds
+- prisma generate succeeds
+- seed data is usable for manual testing
+
+Suggested prompt for this stage:
+"Implement the Prisma schema for SchoolMS from the updated spec. Include all models, enums, relations, and uniqueness rules, especially TeacherStreamSubject and stream-level ClassTeacherAssignment. Add an initial migration and a seed script with realistic sample data."
+
+
+Stage 3. Authentication and Authorization
+
+Goal:
+Secure the system and separate admin vs teacher behavior.
+
+Build tasks:
+- implement credentials-based login with NextAuth
+- store hashed passwords
+- create login page
+- add session handling
+- add route protection middleware
+- add role-based layout protection for admin and teacher areas
+- attach teacher identity for scoped mark operations
+
+Authorization rules to enforce:
+- only admins can create teacher accounts
+- no self-registration
+- only admins can access setup, teacher management, full student management, exam config, merit generation, report publishing
+- teachers can access only their dashboard and marks tools
+- teachers can access only assigned stream-subject combinations
+
+What to test:
+- login success and failure flows
+- unauthorized user blocked from admin routes
+- teacher blocked from admin APIs
+- admin allowed everywhere expected
+- session persists correctly
+
+Exit criteria:
+- admin and teacher can log in
+- route protection and API protection work consistently
+
+Suggested prompt for this stage:
+"Build authentication and authorization for SchoolMS using NextAuth credentials provider. Add a login page, hashed passwords, role-based route protection, and API guards so admins and teachers only reach allowed areas. Teacher access must be scoped to assigned stream-subject combinations."
+
+
+Stage 4. School Setup Module
+
+Goal:
+Create the foundational academic structure.
+
+Build tasks:
+- school configuration page and API
+- classes CRUD
+- streams CRUD
+- subjects CRUD
+- class-subject mapping CRUD
+- academic year CRUD
+- term CRUD
+
+Business rules:
+- classes can have streams or be streamless
+- streamless classes should support a DEFAULT stream implementation path
+- subjects are shared school-wide
+- a class can only map a subject once
+- terms belong to academic years
+
+What to test:
+- create, edit, and list classes
+- create streams under a class
+- create subjects once and reuse across classes
+- assign subjects to classes
+- create academic years and terms
+- invalid duplicate mappings are rejected
+
+Exit criteria:
+- admins can fully configure school setup data
+- later modules can depend on stable setup records
+
+Suggested prompt for this stage:
+"Build the admin school setup module for SchoolMS: school config, classes, streams, subjects, class-subject mapping, academic years, and terms. Use validated APIs, admin-only access, and pages aligned with the spec."
+
+
+Stage 5. Teacher Management and Assignments
+
+Goal:
+Manage teachers, subject assignments, and stream class teachers.
+
+Build tasks:
+- teacher CRUD
+- create teacher-linked user accounts
+- assign teacher to stream-subject combinations
+- create stream class teacher assignment flow
+- add assignment history view
+- allow replacing active class teacher by ending previous assignment and creating new one
+
+Business rules:
+- a teacher may teach multiple subjects/streams if assigned
+- a teacher can be active class teacher for only one stream at a time
+- a stream can only have one active class teacher at a time
+- report cards use the active class teacher at report publish time
+
+What to test:
+- create teacher accounts
+- assign valid stream-subject combinations
+- teacher sees assigned combinations only
+- reject second active class teacher for same stream
+- reject same teacher being active class teacher for two streams at once
+- class teacher reassignment preserves history
+
+Exit criteria:
+- teacher accounts and assignments work end-to-end
+- stream class teacher logic is stable
+
+Suggested prompt for this stage:
+"Implement teacher management in SchoolMS with teacher CRUD, user account creation, stream-subject assignments, and stream-level ClassTeacherAssignment with history. Enforce one active class teacher per stream and prevent one teacher from being active class teacher for more than one stream at a time."
+
+
+Stage 6. Student Management
+
+Goal:
+Add and maintain student records.
+
+Build tasks:
+- student CRUD
+- filterable student list
+- student profile
+- student stream history view
+- bulk upload wizard for CSV and Excel
+- duplicate admission number update behavior
+
+Business rules:
+- admission number should uniquely identify the student
+- stream_name is ignored for streamless classes
+- bulk upload should preview row errors before commit
+- active stream placement drives where the student appears
+
+What to test:
+- create a student manually
+- update a student
+- bulk upload valid records
+- reject rows with invalid gender/date/stream
+- update existing student on duplicate admission number
+- streamless class upload behavior works correctly
+
+Exit criteria:
+- admin can fully manage students
+- import is predictable and safe
+
+Suggested prompt for this stage:
+"Build SchoolMS student management with CRUD, filterable listings, profile pages, stream history, and a bulk upload wizard for CSV/Excel. Add row-level validation preview and update existing student records when admission numbers already exist."
+
+
+Stage 7. Student Lifecycle Workflows
+
+Goal:
+Implement promotion, transfer, and graduation.
+
+Build tasks:
+- promote action
+- transfer action
+- graduate action
+- close prior stream history records properly
+- create new stream history entries when required
+- hide transferred/graduated students from active mark-entry lists
+
+Business rules:
+- promotion moves student to next class level
+- promotion auto-places student into default/mapped next stream
+- admin can later reassign stream after promotion
+- no next class means graduation
+- transfer records destination school and effective date
+
+What to test:
+- promote one student
+- bulk promote a full class
+- exclude selected students from promotion
+- graduate top-class students correctly
+- transfer removes student from active lists
+- stream history shows correct before/after states
+
+Exit criteria:
+- student status transitions are reliable and historically traceable
+
+Suggested prompt for this stage:
+"Implement SchoolMS student lifecycle workflows: promote, transfer, and graduate. Use transactions, maintain StudentStreamHistory correctly, auto-place promoted students into mapped/default next streams, and remove inactive students from active operational lists."
+
+
+Stage 8. Exam Management
+
+Goal:
+Allow admins to define exams and what each class sits for.
+
+Build tasks:
+- exam CRUD
+- exam configuration by class and subject
+- class-specific subject selection per exam
+- exam list and detail pages
+- marks progress display
+
+Business rules:
+- exams belong to terms
+- different classes can sit different subjects in the same exam
+- no marks should be entered for unconfigured class-subject pairs
+
+What to test:
+- create exam under a term
+- configure multiple classes with different subjects
+- edit exam configuration
+- reject duplicate exam/class/subject configuration
+- marks UI only exposes valid options
+
+Exit criteria:
+- admin can fully prepare an exam before marks entry starts
+
+Suggested prompt for this stage:
+"Build SchoolMS exam management with exam CRUD and configuration per class and subject. Enforce that marks can only be entered for class-subject combinations explicitly configured for the selected exam."
+
+
+Stage 9. Marks Entry and Review
+
+Goal:
+Implement secure marks capture for teachers and full review for admins.
+
+Build tasks:
+- teacher marks selection flow: exam -> stream -> subject
+- single mark entry
+- marks table entry/edit screen
+- CSV upload flow for marks
+- validation preview before commit
+- admin marks review view
+- admin edit mark feature
+- admin review/lock workflow
+
+Authorization rules:
+- teachers can operate only in assigned stream-subject combinations
+- teacher cannot upload for another teacher's subject in same stream
+- teacher cannot upload same subject in a different stream unless assigned there too
+- teacher cannot upload marks for unconfigured exam/class/subject combinations
+- teacher can overwrite own marks before admin review
+- after admin review, only admin can change marks
+
+What to test:
+- teacher sees only assigned exam/stream/subject combinations
+- valid single-entry submission saves correctly
+- valid CSV upload saves correctly
+- invalid student/stream mismatch is rejected
+- invalid subject for exam/class is rejected
+- teacher overwrite works before review
+- teacher edit fails after admin review
+- admin can still edit after review
+
+Exit criteria:
+- mark capture is secure, scoped, and audit-friendly
+
+Suggested prompt for this stage:
+"Implement the SchoolMS marks module for teachers and admins. Teachers must enter or upload marks only for their assigned stream-subject combinations and only for configured exam/class/subject pairs. Teachers can overwrite their own marks before admin review; after review, only admins can edit marks."
+
+
+Stage 10. Ranking and Merit List Engine
+
+Goal:
+Compute performance summaries from marks.
+
+Build tasks:
+- total score aggregation
+- class rank calculation
+- stream rank calculation
+- competition tie ranking logic: 1, 1, 3
+- top 10 girls
+- top 10 boys
+- subject champions
+- stream-vs-stream averages
+- most improved logic using previous exam
+- merit list persistence
+- merit list UI
+
+Business rules:
+- most improved compares against the immediately previous exam
+- if no previous exam exists, hide most improved section
+- rankings should be reproducible and deterministic
+
+What to test:
+- totals compute correctly
+- ties rank correctly using 1, 1, 3
+- stream ranking is correct
+- top girls and boys filter correctly
+- subject champions select highest scorer correctly
+- most improved uses previous exam only
+- merit list output matches expected manual calculations
+
+Exit criteria:
+- merit list numbers can be trusted by admin users
+
+Suggested prompt for this stage:
+"Build the SchoolMS ranking engine and merit list module. Compute totals, class rank, stream rank, top girls, top boys, subject champions, stream-vs-stream ranking, and most improved based on the immediately previous exam. Use competition ranking for ties: 1, 1, 3."
+
+
+Stage 11. Report Publishing and Remarks
+
+Goal:
+Turn exam data into published report configurations.
+
+Build tasks:
+- report selection flow by term and class
+- choose up to three exams
+- auto-generate remarks
+- admin remark edit screen
+- publish action
+- reopen/unpublish action
+- report state handling
+
+Business rules:
+- reports are class-based per term
+- up to three exams per report
+- remarks are generated at publish time
+- admin can edit remarks
+- report card class teacher name comes from active stream class teacher at publish time
+- published reports can later be reopened by admin
+
+What to test:
+- publish report with one exam
+- publish report with two or three exams
+- remarks generate correctly
+- admin can override remarks
+- report locks after publish
+- reopen allows corrections
+- class teacher name resolves correctly from stream assignment
+
+Exit criteria:
+- report publishing works end-to-end with editable remarks and reopen support
+
+Suggested prompt for this stage:
+"Implement SchoolMS report publishing for term + class. Allow selection of up to three exams, generate student remarks, let admins edit remarks, lock on publish, and support admin reopen/unpublish. Resolve class teacher names from the active stream ClassTeacherAssignment at publish time."
+
+
+Stage 12. PDF Generation
+
+Goal:
+Export polished report cards and merit lists.
+
+Build tasks:
+- HTML template for report card
+- HTML template for merit list
+- Puppeteer PDF generation service
+- single student PDF export
+- full class merged PDF export
+- stream PDF export
+- merit list PDF export
+
+Business rules:
+- class PDF sorted by class rank
+- stream PDF sorted by stream rank
+- placeholder image if student photo missing
+- report should include scores, grades, totals, ranks, dates, remarks, and teacher details
+
+What to test:
+- PDF generation works locally
+- merged PDFs contain expected students in expected order
+- no broken layout with missing photo
+- long names and remarks do not destroy layout
+- merit list exports all expected sections
+
+Exit criteria:
+- PDFs generate reliably and match required content
+
+Suggested prompt for this stage:
+"Build PDF generation for SchoolMS using Puppeteer. Implement report card and merit list templates, support single student, full class, and stream exports, and ensure class and stream merged exports are ordered by rank."
+
+
+Stage 13. QA Hardening, Seeds, and Deployment Readiness
+
+Goal:
+Make the system stable enough for real usage.
+
+Build tasks:
+- add unit tests for grading, ranking, remarks, and lifecycle logic
+- add integration tests for auth, marks permissions, report publishing, and reopen flow
+- improve seed data to cover realistic scenarios
+- handle empty states and validation messages
+- document local setup and production env
+- verify Docker and Puppeteer runtime behavior
+
+What to test:
+- full regression on critical user journeys
+- seeded demo workflow from setup to PDF
+- invalid inputs across all bulk upload flows
+- permissions boundaries between admin and teacher
+- reopened report behavior after prior publish
+
+Exit criteria:
+- critical flows have automated coverage
+- manual QA checklist passes
+- deployment instructions are usable by another developer
+
+Suggested prompt for this stage:
+"Harden SchoolMS for delivery. Add targeted unit and integration tests for grading, rankings, student lifecycle, marks permissions, report publishing, and reopen flows. Improve seed data, document setup, and verify Docker plus Puppeteer production readiness."
+
+
+5. Cross-Feature Test Checklist
+
+Use this as a final manual QA sweep.
+
+Authentication
+- admin can log in
+- teacher can log in
+- invalid credentials fail cleanly
+- teacher cannot access admin pages
+
+Setup
+- school config saves
+- classes save
+- streams save
+- subjects save
+- class-subject mappings save
+- terms save
+
+Teachers
+- teacher account is created
+- teacher assignments save
+- teacher sees assigned streams/subjects only
+- active stream class teacher can be changed with history retained
+
+Students
+- manual student creation works
+- bulk upload preview works
+- invalid upload rows show errors
+- duplicate admission number updates existing record
+- transfer hides student from active lists
+- promotion moves student correctly
+
+Exams
+- exam is created under term
+- class-subject config is enforced
+
+Marks
+- teacher can enter marks only in own assigned stream-subject
+- teacher cannot enter marks outside assignment
+- teacher can overwrite own marks before admin review
+- admin review blocks further teacher edits
+- admin can still edit reviewed marks
+
+Merit List
+- totals are correct
+- class rank and stream rank are correct
+- ties use 1, 1, 3
+- most improved section hides when there is no previous exam
+
+Reports
+- report publishes correctly
+- remarks generate correctly
+- class teacher name is correct for each stream
+- report can be reopened
+- PDF export still works after reopen and republish
+
+
+6. Suggested Delivery Milestones
+
+Milestone A:
+- Stages 1 to 4 complete
+- result: setup-ready system
+
+Milestone B:
+- Stages 5 to 7 complete
+- result: people and academic operations ready
+
+Milestone C:
+- Stages 8 to 10 complete
+- result: exam and performance engine ready
+
+Milestone D:
+- Stages 11 to 12 complete
+- result: reporting and exports ready
+
+Milestone E:
+- Stage 13 complete
+- result: system hardened for real deployment
+
+
+7. Best Prompting Pattern for Each Stage
+
+When using an AI coding assistant, ask it to do one stage at a time.
+For each stage, ask for:
+- implementation
+- validation
+- tests
+- a short summary of files changed
+
+Reusable prompt pattern:
+
+"Implement Stage [X] of SchoolMS according to the spec and build guide. First inspect the current codebase, then make the necessary code changes, keep business logic organized, add validation, and run relevant tests if available. After implementation, summarize what changed, what was tested, and any remaining gaps."
+
+If you want stricter output:
+
+"Implement only Stage [X] of SchoolMS. Do not start later stages. Follow the spec exactly, preserve existing code patterns, add only the routes, pages, schema, and logic needed for this stage, and include tests for the new business rules."
+
+
+8. Recommended Stage Sequence for AI-Assisted Development
+
+Prompt 1:
+"Implement Stage 1 of SchoolMS: project foundation."
+
+Prompt 2:
+"Implement Stage 2 of SchoolMS: Prisma schema, migration, and seed."
+
+Prompt 3:
+"Implement Stage 3 of SchoolMS: auth and authorization."
+
+Prompt 4:
+"Implement Stage 4 of SchoolMS: school setup module."
+
+Prompt 5:
+"Implement Stage 5 of SchoolMS: teacher management, stream-subject assignments, and stream-level class teacher assignment with history."
+
+Prompt 6:
+"Implement Stage 6 of SchoolMS: student management and bulk upload."
+
+Prompt 7:
+"Implement Stage 7 of SchoolMS: promotion, transfer, and graduation workflows."
+
+Prompt 8:
+"Implement Stage 8 of SchoolMS: exams and per-class subject configuration."
+
+Prompt 9:
+"Implement Stage 9 of SchoolMS: marks entry, CSV upload, admin review, and permission enforcement so teachers only work in assigned stream-subject combinations."
+
+Prompt 10:
+"Implement Stage 10 of SchoolMS: ranking engine and merit list generation using competition ranking 1, 1, 3."
+
+Prompt 11:
+"Implement Stage 11 of SchoolMS: report publishing, remark generation/editing, class teacher resolution, and reopen flow."
+
+Prompt 12:
+"Implement Stage 12 of SchoolMS: PDF generation for report cards and merit lists."
+
+Prompt 13:
+"Implement Stage 13 of SchoolMS: tests, seed improvements, QA hardening, and deployment readiness."
+
+
+9. High-Risk Areas to Watch Closely
+
+These areas are most likely to cause bugs or rework:
+- marks authorization by teacher assignment
+- class teacher active assignment switching
+- promotion history and currentStreamId consistency
+- merit ranking accuracy and tie handling
+- report publish vs reopen state transitions
+- PDF generation inside Docker
+- bulk upload validation and partial overwrite behavior
+
+
+10. Final Recommendation
+
+Do not try to build the whole system in one pass.
+Build and verify one stage at a time.
+At the end of every stage:
+- run schema/type checks
+- run relevant tests
+- manually verify the stage in the UI
+- confirm no permissions regression was introduced
+
+If using AI assistance, keep the assistant constrained to one stage per prompt unless the current stage is trivial.

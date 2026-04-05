@@ -1,0 +1,52 @@
+
+> schoolms@0.1.0 dev
+> next dev
+
+ ⚠ Port 3000 is in use, trying 3001 instead.
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3001
+  - Environments: .env
+
+ ✓ Starting...
+RangeError: Array buffer allocation failed
+    at new ArrayBuffer (<anonymous>)
+    at new Uint8Array (<anonymous>)
+    at new FastBuffer (node:internal/buffer:961:5)
+    at createUnsafeBuffer (node:internal/buffer:1097:12)
+    at allocate (node:buffer:444:10)
+    at Function.allocUnsafe (node:buffer:409:10)
+    at Gunzip.ZlibBase (node:zlib:252:28)
+    at Gunzip.Zlib (node:zlib:671:3)
+    at new Gunzip (node:zlib:736:3)
+    at value (node:zlib:847:14)
+
+
+#
+# Fatal process out of memory: Zone
+#
+----- Native stack trace -----
+
+ 1: 00007FF7398F20AD 
+ 2: 00007FF7397D62CF 
+ 3: 00007FF73A9A16E6 
+ 4: 00007FF73A3C6EA1 
+ 5: 00007FF739E98ECB 
+ 6: 00007FF739C2F968 
+ 7: 00007FF73AF3A6DC 
+ 8: 00007FF73AF41002 
+ 9: 00007FF73AF412A6 
+10: 00007FF73AF31BDE 
+11: 00007FF73AF318AD 
+12: 00007FF73AF30EEE 
+13: 00007FF73AF4A97B 
+14: 00007FF73AABF784 
+15: 00007FF73AAB934A 
+16: 00007FF73A3437E4 
+17: 00007FF73A2FCFFF 
+18: 00007FF73A5CB995 
+19: 00007FF7397D8B59 
+20: 00007FF739952323 
+21: 00007FF73B0B066E 
+22: 00007FFD63117374 BaseThreadInitThunk+20
+23: 00007FFD6345CC91 RtlUserThreadStart+33
+[?25h
