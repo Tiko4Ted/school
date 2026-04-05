@@ -252,11 +252,7 @@ export async function generateMeritList(examId: string, classId: string) {
       },
     });
 
-    return {
-      ...saved,
-      topGirls: filterTopByGender(saved.entries.map(mapEntry), Gender.FEMALE),
-      topBoys: filterTopByGender(saved.entries.map(mapEntry), Gender.MALE),
-    };
+    return shapeMeritList(saved);
   });
 }
 
@@ -291,10 +287,39 @@ export async function getMeritList(examId: string, classId: string) {
     throw new AppError("Merit list not found", 404);
   }
 
+  return shapeMeritList(meritList);
+}
+
+function shapeMeritList(
+  meritList: Prisma.MeritListGetPayload<{
+    include: {
+      entries: { include: { student: true; stream: true } };
+      subjectChampions: { include: { subject: true; student: true } };
+      exam: true;
+      class: true;
+    };
+  }>,
+) {
+  const mappedEntries = meritList.entries.map(mapEntry);
+  const topGirlsRaw = filterTopByGender(mappedEntries, Gender.FEMALE);
+  const topBoysRaw = filterTopByGender(mappedEntries, Gender.MALE);
   return {
     ...meritList,
-    topGirls: filterTopByGender(meritList.entries.map(mapEntry), Gender.FEMALE),
-    topBoys: filterTopByGender(meritList.entries.map(mapEntry), Gender.MALE),
+    entries: mappedEntries,
+    subjectChampions: meritList.subjectChampions.map((champion) => ({
+      ...champion,
+      score: Number(champion.score),
+    })),
+    topGirls: topGirlsRaw.map((entry) => ({
+      studentId: entry.studentId,
+      studentName: `${entry.student.firstName} ${entry.student.lastName}`,
+      score: entry.totalScore,
+    })),
+    topBoys: topBoysRaw.map((entry) => ({
+      studentId: entry.studentId,
+      studentName: `${entry.student.firstName} ${entry.student.lastName}`,
+      score: entry.totalScore,
+    })),
   };
 }
 

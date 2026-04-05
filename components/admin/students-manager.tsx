@@ -56,7 +56,7 @@ const studentFormSchema = z.object({
   admissionNumber: z.string().trim().min(2, "Admission number is required."),
   firstName: z.string().trim().min(2, "First name is required."),
   lastName: z.string().trim().min(2, "Last name is required."),
-  gender: z.enum(["MALE", "FEMALE"], { error: "Gender is required." }),
+  gender: z.enum(["MALE", "FEMALE"], { message: "Gender is required." }),
   dateOfBirth: z.string().trim().min(1, "Date of birth is required."),
   currentClassId: z.string().uuid("Select a class."),
   currentStreamId: z.string().uuid("Select a stream."),
