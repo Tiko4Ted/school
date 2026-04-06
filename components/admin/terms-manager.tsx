@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, ButtonLink } from "@/components/ui/button";
+import { Button, ButtonLink, PrimaryButton } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
+import { Dialog } from "@/components/ui/dialog";
+import { FormField } from "@/components/ui/form-field";
 
 type Term = {
   id: string;
@@ -19,302 +21,114 @@ type Props = {
   academicYearName: string;
 };
 
-type EditableTerm = {
-  id: string;
-  name: string;
-  startDate: string;
-  endDate: string;
-  isActive: boolean;
-};
-
-function normalizeDate(value: string) {
-  return value.slice(0, 10);
-}
-
 export function TermsManager({ academicYearId, academicYearName }: Props) {
   const [terms, setTerms] = useState<Term[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
-  const [newTerm, setNewTerm] = useState({
-    name: "",
-    startDate: "",
-    endDate: "",
-    isActive: false,
-  });
-  const [editingTermId, setEditingTermId] = useState<string | null>(null);
-  const [editingValues, setEditingValues] = useState<EditableTerm | null>(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
+  const [formMode, setFormMode] = useState<"create" | "edit">("create");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [values, setValues] = useState({ name: "", startDate: "", endDate: "", isActive: false });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => { void loadTerms(); }, [academicYearId]);
 
   async function loadTerms() {
-    const response = await fetch(`/api/setup/terms?academicYearId=${academicYearId}`, { cache: "no-store" });
-    const payload = (await response.json().catch(() => null)) as { data?: Term[]; error?: string } | null;
-
-    if (!response.ok) {
-      setError(payload?.error ?? "Failed to load terms.");
-      setIsLoading(false);
-      return;
-    }
-
-    setTerms(payload?.data ?? []);
-    setError(null);
+    setIsLoading(true);
+    const res = await fetch(`/api/setup/terms?academicYearId=${academicYearId}`, { cache: "no-store" });
+    const payload = await res.json();
+    if (res.ok) setTerms(payload.data ?? []);
     setIsLoading(false);
   }
 
-  useEffect(() => {
-    void loadTerms();
-  }, [academicYearId]);
-
-  async function handleCreateTerm(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-    setIsCreating(true);
-
-    const response = await fetch("/api/setup/terms", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        academicYearId,
-        ...newTerm,
-      }),
-    });
-
-    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-
-    if (!response.ok) {
-      setError(payload?.error ?? "Failed to create term.");
-      setIsCreating(false);
-      return;
-    }
-
-    setNewTerm({ name: "", startDate: "", endDate: "", isActive: false });
-    setIsCreating(false);
-    void loadTerms();
+  function handleEdit(t: Term) {
+    setFormMode("edit");
+    setEditingId(t.id);
+    setValues({ name: t.name, startDate: t.startDate.split('T')[0], endDate: t.endDate.split('T')[0], isActive: t.isActive });
+    setIsFormOpen(true);
   }
 
-  function startEditing(term: Term) {
-    setEditingTermId(term.id);
-    setEditingValues({
-      id: term.id,
-      name: term.name,
-      startDate: normalizeDate(term.startDate),
-      endDate: normalizeDate(term.endDate),
-      isActive: term.isActive,
-    });
-  }
-
-  async function saveEdit() {
-    if (!editingValues) {
-      return;
-    }
-
-    setError(null);
-    const response = await fetch(`/api/setup/terms/${editingValues.id}`, {
-      method: "PATCH",
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setIsSubmitting(true);
+    const endpoint = formMode === "create" ? "/api/setup/terms" : `/api/setup/terms/${editingId}`;
+    const method = formMode === "create" ? "POST" : "PATCH";
+    const res = await fetch(endpoint, {
+      method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: editingValues.name,
-        startDate: editingValues.startDate,
-        endDate: editingValues.endDate,
-        isActive: editingValues.isActive,
-      }),
+      body: JSON.stringify({ ...values, academicYearId }),
     });
-
-    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-
-    if (!response.ok) {
-      setError(payload?.error ?? "Failed to update term.");
-      return;
-    }
-
-    setEditingTermId(null);
-    setEditingValues(null);
-    void loadTerms();
+    if (res.ok) { await loadTerms(); setIsFormOpen(false); }
+    setIsSubmitting(false);
   }
 
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div className="space-y-2">
-            <CardTitle>{academicYearName}</CardTitle>
-            <CardDescription>
-              Create and edit terms for this academic year.
-            </CardDescription>
+        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-b border-border-subtle bg-background/50 py-6">
+          <div className="space-y-1">
+            <CardTitle className="text-xl">{academicYearName} · Operational Terms</CardTitle>
+            <CardDescription>Define institutional session periods and active reporting windows.</CardDescription>
           </div>
-          <ButtonLink href="/admin/academicyears" variant="outline">Back to Academic Years</ButtonLink>
+          <div className="flex gap-3">
+            <ButtonLink href="/admin/academicyears" variant="outline" className="h-10 px-6 font-bold uppercase text-[10px]">Back to Years</ButtonLink>
+            <PrimaryButton onClick={() => { setFormMode("create"); setValues({ name: "", startDate: "", endDate: "", isActive: false }); setIsFormOpen(true); }} className="h-10 px-8 font-bold uppercase text-[10px]">Add Term</PrimaryButton>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-8">
-          <form className="grid gap-4 rounded-2xl border border-border-subtle bg-background/50 p-6 dark:border-border-dark dark:bg-background-dark/50 md:grid-cols-5" onSubmit={handleCreateTerm}>
-            <Input
-              placeholder="Term name"
-              value={newTerm.name}
-              onChange={(event) => setNewTerm((current) => ({ ...current, name: event.target.value }))}
-            />
-            <Input
-              type="date"
-              value={newTerm.startDate}
-              onChange={(event) => setNewTerm((current) => ({ ...current, startDate: event.target.value }))}
-            />
-            <Input
-              type="date"
-              value={newTerm.endDate}
-              onChange={(event) => setNewTerm((current) => ({ ...current, endDate: event.target.value }))}
-            />
-            <label className="flex items-center gap-3 rounded-xl border border-border-subtle bg-white px-4 py-2.5 text-sm font-medium text-text-secondary dark:border-border-dark dark:bg-card-dark">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-border-subtle text-primary focus:ring-primary dark:border-border-dark"
-                checked={newTerm.isActive}
-                onChange={(event) => setNewTerm((current) => ({ ...current, isActive: event.target.checked }))}
-              />
-              Active
-            </label>
-            <Button
-              type="submit"
-              disabled={isCreating}
-              className="bg-primary text-white hover:bg-primary-dark"
-            >
-              {isCreating ? "Creating..." : "Create Term"}
-            </Button>
-          </form>
-
-          {error ? (
-            <div className="rounded-xl border border-error/20 bg-error/10 p-4 text-sm font-medium text-error">
-              {error}
-            </div>
-          ) : null}
-
-          {isLoading ? <p className="text-sm text-text-secondary">Loading terms...</p> : null}
-
-          {!isLoading ? (
+        <CardContent className="p-0">
+          {isLoading ? <p className="py-20 text-center text-[10px] font-black uppercase text-text-secondary animate-pulse">Loading Terms...</p> : (
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Start</TableHead>
-                  <TableHead>End</TableHead>
-                  <TableHead>Active</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
+              <TableHeader><TableRow className="bg-background/80">
+                <TableHead className="py-3">Term Identity</TableHead>
+                <TableHead className="py-3">Period</TableHead>
+                <TableHead className="py-3">Status</TableHead>
+                <TableHead className="py-3 text-right pr-8">Actions</TableHead>
+              </TableRow></TableHeader>
               <TableBody>
-                {terms.map((term) => {
-                  const isEditing = editingTermId === term.id && editingValues;
-
-                  return (
-                    <TableRow key={term.id}>
-                      <TableCell>
-                        {isEditing ? (
-                          <Input
-                            className="py-1.5"
-                            value={editingValues.name}
-                            onChange={(event) =>
-                              setEditingValues((current) => (current ? { ...current, name: event.target.value } : current))
-                            }
-                          />
-                        ) : (
-                          <span className="font-semibold text-text-primary dark:text-text-primary-dark">{term.name}</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {isEditing ? (
-                          <Input
-                            type="date"
-                            className="py-1.5"
-                            value={editingValues.startDate}
-                            onChange={(event) =>
-                              setEditingValues((current) =>
-                                current ? { ...current, startDate: event.target.value } : current,
-                              )
-                            }
-                          />
-                        ) : (
-                          <span className="text-text-secondary dark:text-text-secondary-dark">{normalizeDate(term.startDate)}</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {isEditing ? (
-                          <Input
-                            type="date"
-                            className="py-1.5"
-                            value={editingValues.endDate}
-                            onChange={(event) =>
-                              setEditingValues((current) => (current ? { ...current, endDate: event.target.value } : current))
-                            }
-                          />
-                        ) : (
-                          <span className="text-text-secondary dark:text-text-secondary-dark">{normalizeDate(term.endDate)}</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {isEditing ? (
-                          <label className="inline-flex items-center gap-2 text-sm font-medium text-text-secondary dark:text-text-secondary-dark">
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 rounded border-border-subtle text-primary focus:ring-primary dark:border-border-dark"
-                              checked={editingValues.isActive}
-                              onChange={(event) =>
-                                setEditingValues((current) =>
-                                  current ? { ...current, isActive: event.target.checked } : current,
-                                )
-                              }
-                            />
-                            Active
-                          </label>
-                        ) : (
-                          <span className={`inline-flex items-center rounded-lg px-2 py-0.5 text-xs font-bold uppercase ${term.isActive ? "bg-secondary-light text-secondary" : "bg-background text-text-secondary"}`}>
-                            {term.isActive ? "Active" : "Inactive"}
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {isEditing ? (
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              type="button"
-                              onClick={() => void saveEdit()}
-                              className="h-9 bg-primary text-white"
-                            >
-                              Save
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => {
-                                setEditingTermId(null);
-                                setEditingValues(null);
-                              }}
-                              className="h-9"
-                            >
-                              Cancel
-                            </Button>
-                          </div>
-                        ) : (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => startEditing(term)}
-                            className="h-9"
-                          >
-                            Edit
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {terms.length === 0 ? (
-                  <TableRow>
-                    <TableCell className="py-10 text-center text-text-secondary" colSpan={5}>
-                      No terms found for this academic year.
+                {terms.map((t) => (
+                  <TableRow key={t.id} className="group hover:bg-primary-light/5 transition-colors">
+                    <TableCell className="py-2"><span className="text-[13px] font-black text-text-primary uppercase tracking-tight">{t.name}</span></TableCell>
+                    <TableCell className="py-2"><span className="text-[11px] font-bold text-text-secondary">{new Date(t.startDate).toLocaleDateString()} — {new Date(t.endDate).toLocaleDateString()}</span></TableCell>
+                    <TableCell className="py-2">
+                      <span className={`inline-flex rounded-lg px-2 py-0.5 text-[9px] font-black uppercase border ${t.isActive ? 'bg-secondary-light/50 text-secondary border-secondary/20' : 'bg-background text-text-secondary border-border-subtle'}`}>
+                        {t.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </TableCell>
+                    <TableCell className="py-2 pr-8 text-right relative">
+                      <button onClick={() => setOpenMenuId(openMenuId === t.id ? null : t.id)} className="rounded-xl p-2 text-text-secondary hover:bg-slate-100"><svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" /></svg></button>
+                      {openMenuId === t.id && (
+                        <><div className="fixed inset-0 z-20" onClick={() => setOpenMenuId(null)} />
+                        <div className="absolute right-8 top-10 z-30 w-40 rounded-xl border border-border-subtle bg-card p-1 shadow-2xl dark:bg-card-dark text-left">
+                          <button onClick={() => { handleEdit(t); setOpenMenuId(null); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-black uppercase text-text-primary hover:bg-primary-light/50 transition-colors">Edit Term</button>
+                        </div></>
+                      )}
                     </TableCell>
                   </TableRow>
-                ) : null}
+                ))}
               </TableBody>
             </Table>
-          ) : null}
+          )}
         </CardContent>
       </Card>
+
+      <Dialog isOpen={isFormOpen} onClose={() => setIsFormOpen(false)} size="lg" title={formMode === "create" ? "Add Operational Term" : "Edit Term Details"}>
+        <form className="space-y-6" onSubmit={handleSubmit}>
+          <FormField label="Term Designation"><Input value={values.name} onChange={e => setValues(c => ({...c, name: e.target.value}))} placeholder="e.g. Term I" className="h-11 font-bold" /></FormField>
+          <div className="grid gap-6 md:grid-cols-2">
+            <FormField label="Start Date"><Input type="date" value={values.startDate} onChange={e => setValues(c => ({...c, startDate: e.target.value}))} className="h-11" /></FormField>
+            <FormField label="End Date"><Input type="date" value={values.endDate} onChange={e => setValues(c => ({...c, endDate: e.target.value}))} className="h-11" /></FormField>
+          </div>
+          <div className="flex items-center gap-3 p-4 rounded-xl border border-border-subtle bg-slate-50/50">
+            <input type="checkbox" id="isActiveTerm" checked={values.isActive} onChange={e => setValues(c => ({...c, isActive: e.target.checked}))} className="h-5 w-5 rounded border-border-subtle text-primary" />
+            <label htmlFor="isActiveTerm" className="text-xs font-black uppercase tracking-widest text-text-secondary">Mark as Active Reporting Term</label>
+          </div>
+          <div className="flex items-center justify-end gap-3 border-t border-border-subtle pt-6">
+            <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)} className="h-11 px-8 font-black uppercase text-[10px]">Cancel</Button>
+            <PrimaryButton type="submit" disabled={isSubmitting} className="h-11 px-10 font-black uppercase text-[10px] shadow-soft">Save Term</PrimaryButton>
+          </div>
+        </form>
+      </Dialog>
     </div>
   );
 }

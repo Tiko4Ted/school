@@ -64,6 +64,12 @@ export async function getClassById(classId: string) {
 export async function listStreamsByClassId(classId: string) {
   return db.stream.findMany({
     where: { classId },
+    include: {
+      classTeacherAssignments: {
+        where: { isActive: true },
+        include: { teacher: true },
+      },
+    },
     orderBy: [{ isDefault: "desc" }, { name: "asc" }],
   });
 }
@@ -73,6 +79,10 @@ export async function getStreamById(streamId: string) {
     where: { id: streamId },
     include: {
       class: true,
+      classTeacherAssignments: {
+        where: { isActive: true },
+        include: { teacher: true },
+      },
     },
   });
 }
@@ -103,7 +113,7 @@ export async function updateClass(
   });
 }
 
-export async function createStream(data: { classId: string; name: string; isDefault: boolean }) {
+export async function createStream(data: { classId: string; name: string; isDefault: boolean; teacherId?: string }) {
   const schoolClass = await db.class.findUnique({
     where: { id: data.classId },
   });
@@ -116,35 +126,107 @@ export async function createStream(data: { classId: string; name: string; isDefa
     throw new AppError("Streamless classes must use the DEFAULT stream name");
   }
 
-  if (data.isDefault) {
-    await db.stream.updateMany({
-      where: { classId: data.classId, isDefault: true },
-      data: { isDefault: false },
-    });
-  }
+  return db.$transaction(async (tx) => {
+    if (data.isDefault) {
+      await tx.stream.updateMany({
+        where: { classId: data.classId, isDefault: true },
+        data: { isDefault: false },
+      });
+    }
 
-  return db.stream.create({ data });
+    if (data.teacherId) {
+      const activeAssignment = await tx.classTeacherAssignment.findFirst({
+        where: { teacherId: data.teacherId, isActive: true },
+      });
+      if (activeAssignment) {
+        throw new AppError("Teacher is already assigned to another active stream", 400);
+      }
+    }
+
+    const stream = await tx.stream.create({
+      data: {
+        classId: data.classId,
+        name: data.name,
+        isDefault: data.isDefault,
+      },
+    });
+
+    if (data.teacherId) {
+      await tx.classTeacherAssignment.create({
+        data: {
+          streamId: stream.id,
+          teacherId: data.teacherId,
+          startDate: new Date(),
+          isActive: true,
+        },
+      });
+    }
+
+    return stream;
+  });
 }
 
-export async function updateStream(streamId: string, data: Partial<{ name: string; isDefault: boolean }>) {
+export async function updateStream(
+  streamId: string,
+  data: Partial<{ name: string; isDefault: boolean; teacherId: string }>,
+) {
   const stream = await db.stream.findUnique({
     where: { id: streamId },
+    include: { classTeacherAssignments: { where: { isActive: true } } },
   });
 
   if (!stream) {
     throw new AppError("Stream not found", 404);
   }
 
-  if (data.isDefault) {
-    await db.stream.updateMany({
-      where: { classId: stream.classId, isDefault: true },
-      data: { isDefault: false },
-    });
-  }
+  return db.$transaction(async (tx) => {
+    if (data.isDefault) {
+      await tx.stream.updateMany({
+        where: { classId: stream.classId, isDefault: true },
+        data: { isDefault: false },
+      });
+    }
 
-  return db.stream.update({
-    where: { id: streamId },
-    data,
+    if (data.teacherId !== undefined) {
+      const currentActive = stream.classTeacherAssignments[0];
+
+      if (!currentActive || currentActive.teacherId !== data.teacherId) {
+        if (data.teacherId) {
+          const teacherBusy = await tx.classTeacherAssignment.findFirst({
+            where: { teacherId: data.teacherId, isActive: true, NOT: { streamId } },
+          });
+          if (teacherBusy) {
+            throw new AppError("Teacher is already assigned to another active stream", 400);
+          }
+        }
+
+        if (currentActive) {
+          await tx.classTeacherAssignment.update({
+            where: { id: currentActive.id },
+            data: { isActive: false, endDate: new Date() },
+          });
+        }
+
+        if (data.teacherId) {
+          await tx.classTeacherAssignment.create({
+            data: {
+              streamId,
+              teacherId: data.teacherId,
+              startDate: new Date(),
+              isActive: true,
+            },
+          });
+        }
+      }
+    }
+
+    return tx.stream.update({
+      where: { id: streamId },
+      data: {
+        name: data.name,
+        isDefault: data.isDefault,
+      },
+    });
   });
 }
 

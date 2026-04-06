@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button, PrimaryButton } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 
 type TeacherRecord = {
   id: string;
@@ -87,6 +88,10 @@ export function TeachersManager() {
   const [isSetupLoading, setIsSetupLoading] = useState(true);
   const [setupError, setSetupError] = useState<string | null>(null);
 
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isAssignOpen, setIsAssignOpen] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
   const [editingTeacherId, setEditingTeacherId] = useState<string | null>(null);
   const [teacherValues, setTeacherValues] = useState(initialTeacherValues);
@@ -145,6 +150,7 @@ export function TeachersManager() {
     setTeacherValues(initialTeacherValues);
     setTeacherFieldErrors({});
     setTeacherFormError(null);
+    setIsFormOpen(false);
   }
 
   function handleEditTeacher(teacher: TeacherRecord) {
@@ -163,6 +169,7 @@ export function TeachersManager() {
       ...current,
       teacherId: teacher.id,
     }));
+    setIsFormOpen(true);
   }
 
   async function handleTeacherSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -201,20 +208,12 @@ export function TeachersManager() {
       return;
     }
 
-    if (formMode === "edit" && !editingTeacherId) {
-      setTeacherFormError("Select a teacher to edit before saving.");
-      setIsSubmittingTeacher(false);
-      return;
-    }
-
     const endpoint = formMode === "create" ? "/api/teachers" : `/api/teachers/${editingTeacherId}`;
     const method = formMode === "create" ? "POST" : "PATCH";
 
     const response = await fetch(endpoint, {
       method,
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(parsedData.data),
     });
 
@@ -228,18 +227,12 @@ export function TeachersManager() {
 
     await loadTeachers();
     resetTeacherForm();
-    setAssignmentValues((current) => ({
-      ...current,
-      teacherId: formMode === "create" ? "" : current.teacherId,
-    }));
     setIsSubmittingTeacher(false);
   }
 
   function handleAssignmentChange(field: keyof typeof assignmentValues, value: string) {
     setAssignmentValues((current) => {
-      if (field === "classId") {
-        return { ...current, classId: value, streamId: "", subjectId: "" };
-      }
+      if (field === "classId") return { ...current, classId: value, streamId: "", subjectId: "" };
       return { ...current, [field]: value };
     });
     setAssignmentFieldErrors({});
@@ -270,9 +263,7 @@ export function TeachersManager() {
 
     const response = await fetch("/api/teachers?action=assign-stream-subject", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         teacherId: parsed.data.teacherId,
         streamId: parsed.data.streamId,
@@ -283,38 +274,19 @@ export function TeachersManager() {
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
 
     if (!response.ok) {
-      setAssignmentError(payload?.error ?? "Failed to assign teacher to stream and subject.");
+      setAssignmentError(payload?.error ?? "Failed to assign teacher.");
       setIsSubmittingAssignment(false);
       return;
     }
 
-    const assignedTeacher = teachers.find((teacher) => teacher.id === parsed.data.teacherId);
-    const selectedClass = setup?.classes.find((cls) => cls.id === parsed.data.classId);
-    const selectedStream = selectedClass?.streams.find((stream) => stream.id === parsed.data.streamId);
-    const selectedSubject = selectedClass?.classSubjects.find(
-      (item) => item.subject.id === parsed.data.subjectId,
-    )?.subject;
-
-    setAssignmentSuccess(
-      `Assigned ${assignedTeacher ? `${assignedTeacher.firstName} ${assignedTeacher.lastName}` : "teacher"} to ${
-        selectedSubject ? selectedSubject.name : "subject"
-      } for ${selectedClass ? selectedClass.name : "class"} ${selectedStream ? selectedStream.name : "stream"}.`
-    );
-
-    setAssignmentValues((current) => ({
-      ...current,
-      streamId: "",
-      subjectId: "",
-    }));
-
+    setAssignmentSuccess("Scope assigned successfully.");
+    setAssignmentValues((current) => ({ ...current, streamId: "", subjectId: "" }));
     await loadTeachers();
     setIsSubmittingAssignment(false);
   }
 
   const sortedClasses = useMemo(() => {
-    if (!setup?.classes) {
-      return [];
-    }
+    if (!setup?.classes) return [];
     return [...setup.classes].sort((a, b) => a.level - b.level);
   }, [setup]);
 
@@ -326,311 +298,165 @@ export function TeachersManager() {
   const availableStreams = selectedClass?.streams ?? [];
   const availableSubjects = selectedClass?.classSubjects.map((item) => item.subject) ?? [];
 
+  const teacherStats = useMemo(() => ({
+    total: teachers.length,
+    activeAssignments: teachers.reduce((acc, t) => acc + t.streamSubjectAssignments.length, 0),
+    classTeachers: teachers.filter(t => t.classTeacherAssignments.some(a => a.isActive)).length
+  }), [teachers]);
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 pb-20">
+      {/* Analytics */}
+      <div className="grid gap-6 sm:grid-cols-3">
+        <Card className="border-none shadow-soft bg-primary text-white">
+          <CardContent className="p-6">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60">Faculty Count</p>
+            <p className="mt-1 text-3xl font-black">{teacherStats.total}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-none shadow-soft">
+          <CardContent className="p-6">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-text-secondary/60">Active Assignments</p>
+            <p className="mt-1 text-3xl font-black text-secondary">{teacherStats.activeAssignments}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-none shadow-soft">
+          <CardContent className="p-6">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-text-secondary/60">Class Teacher Roles</p>
+            <p className="mt-1 text-3xl font-black text-accent">{teacherStats.classTeachers}</p>
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
-        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-b border-border-subtle bg-background/50 py-6">
           <div className="space-y-1">
-            <CardTitle>Teacher Management</CardTitle>
-            <CardDescription>
-              Manage teacher accounts, contact details, and their stream + subject assignments.
-            </CardDescription>
+            <CardTitle className="text-xl">Staff Directory</CardTitle>
+            <CardDescription>Official roster of teaching staff and their departmental scopes.</CardDescription>
           </div>
-          <Button variant="outline" onClick={() => void loadTeachers()}>
-            Refresh List
-          </Button>
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={() => void loadTeachers()} className="font-bold uppercase tracking-widest text-[10px] h-10 px-6">
+              Refresh
+            </Button>
+            <PrimaryButton onClick={() => { resetTeacherForm(); setIsFormOpen(true); }} className="font-bold uppercase tracking-widest text-[10px] h-10 px-6 shadow-soft">
+              Add Teacher
+            </PrimaryButton>
+            <Button variant="outline" onClick={() => setIsAssignOpen(true)} className="font-bold uppercase tracking-widest text-[10px] h-10 px-6 border-secondary text-secondary hover:bg-secondary-light/30">
+              Assign Scopes
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {isLoadingTeachers ? (
-            <div className="p-8 text-center text-sm text-text-secondary">Loading teachers...</div>
-          ) : null}
-          {teachersError ? (
-            <div className="p-8 text-center text-sm font-medium text-error">{teachersError}</div>
-          ) : null}
-          {!isLoadingTeachers && !teachersError ? (
+            <p className="py-20 text-center text-sm font-bold uppercase tracking-widest text-text-secondary animate-pulse">Loading Staff...</p>
+          ) : (
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Teacher</TableHead>
-                  <TableHead>Contact & Role</TableHead>
-                  <TableHead>Assigned Subjects</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                <TableRow className="bg-background/80">
+                  <TableHead className="py-3">Staff Member</TableHead>
+                  <TableHead className="py-3">Contact</TableHead>
+                  <TableHead className="py-3">Scope</TableHead>
+                  <TableHead className="py-3">Class Role</TableHead>
+                  <TableHead className="text-right py-3 pr-8">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {teachers.map((teacher) => {
-                  const activeClassTeacher = teacher.classTeacherAssignments.find((assignment) => assignment.isActive);
-
+                  const activeClassTeacher = teacher.classTeacherAssignments.find((a) => a.isActive);
                   return (
-                    <TableRow key={teacher.id}>
-                      <TableCell>
-                        <p className="font-semibold text-text-primary dark:text-text-primary-dark">
-                          {teacher.firstName} {teacher.lastName}
-                        </p>
-                        <p className="mt-0.5 text-xs font-bold uppercase tracking-wider text-text-secondary dark:text-text-secondary-dark">
-                          ID: {teacher.employeeNumber}
-                        </p>
+                    <TableRow key={teacher.id} className="group hover:bg-primary-light/5 transition-colors">
+                      <TableCell className="py-2">
+                        <p className="font-extrabold text-text-primary text-[13px]">{teacher.firstName} {teacher.lastName}</p>
+                        <span className="text-[9px] font-black uppercase text-text-secondary/40 tracking-tighter">ID: {teacher.employeeNumber}</span>
                       </TableCell>
-                      <TableCell>
-                        <p className="text-text-secondary dark:text-text-secondary-dark">{teacher.user.email}</p>
-                        <div className="mt-2 flex items-center gap-2">
-                          <span className="text-xs font-medium text-text-secondary dark:text-text-secondary-dark">Class Teacher:</span>
-                          {activeClassTeacher ? (
-                            <span className="inline-flex items-center rounded-lg bg-primary-light px-2.5 py-1 text-xs font-semibold text-primary">
-                              {activeClassTeacher.stream.class.name} {activeClassTeacher.stream.name}
+                      <TableCell className="py-2 text-[11px] font-medium text-text-secondary">{teacher.user.email}</TableCell>
+                      <TableCell className="py-2">
+                        <div className="flex flex-wrap gap-1.5">
+                          {teacher.streamSubjectAssignments.slice(0, 2).map(a => (
+                            <span key={a.id} className="inline-flex rounded bg-background border border-border-subtle px-1.5 py-0.5 text-[9px] font-black text-primary uppercase">
+                              {a.stream.class.name} {a.stream.name} · {a.subject.code}
                             </span>
-                          ) : (
-                            <span className="text-xs italic text-text-secondary/60">Unassigned</span>
+                          ))}
+                          {teacher.streamSubjectAssignments.length > 2 && (
+                            <span className="text-[9px] font-bold text-text-secondary/40">+{teacher.streamSubjectAssignments.length - 2} more</span>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>
-                        {teacher.streamSubjectAssignments.length ? (
-                          <div className="flex flex-wrap gap-2">
-                            {teacher.streamSubjectAssignments.map((assignment) => (
-                              <span
-                                key={assignment.id}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-border-subtle bg-background px-2.5 py-1 text-xs font-medium text-text-primary dark:border-border-dark dark:bg-background-dark dark:text-text-primary-dark"
-                              >
-                                <strong className="font-bold text-primary">
-                                  {assignment.stream.class.name} {assignment.stream.name}
-                                </strong>
-                                <span className="text-border-subtle dark:text-border-dark">|</span>
-                                {assignment.subject.name}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-xs italic text-text-secondary/60">No subject assignments.</span>
-                        )}
+                      <TableCell className="py-2">
+                        {activeClassTeacher ? (
+                          <span className="inline-flex rounded bg-secondary-light/50 px-2 py-0.5 text-[9px] font-black uppercase text-secondary">
+                            {activeClassTeacher.stream.class.name} {activeClassTeacher.stream.name}
+                          </span>
+                        ) : <span className="text-[9px] italic text-text-secondary/30">None</span>}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" onClick={() => handleEditTeacher(teacher)}>
-                          Edit
-                        </Button>
+                      <TableCell className="py-2 pr-8 text-right relative">
+                        <button onClick={() => setOpenMenuId(openMenuId === teacher.id ? null : teacher.id)} className="rounded-xl p-2 text-text-secondary hover:bg-slate-100"><svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" /></svg></button>
+                        {openMenuId === teacher.id && (
+                          <>
+                            <div className="fixed inset-0 z-20" onClick={() => setOpenMenuId(null)} />
+                            <div className="absolute right-8 top-10 z-30 w-40 rounded-xl border border-border-subtle bg-card p-1 shadow-2xl dark:bg-card-dark text-left">
+                              <button onClick={() => { handleEditTeacher(teacher); setOpenMenuId(null); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-black uppercase text-text-primary hover:bg-primary-light/50 transition-colors">Edit Profile</button>
+                            </div>
+                          </>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
                 })}
-                {teachers.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="py-10 text-center text-text-secondary">
-                      No teachers found. Use the form below to add a teacher.
-                    </TableCell>
-                  </TableRow>
-                ) : null}
               </TableBody>
             </Table>
-          ) : null}
+          )}
         </CardContent>
       </Card>
 
-      <div className="grid gap-8 lg:grid-cols-12">
-        <div className="lg:col-span-7">
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                {formMode === "create" ? "New Teacher Details" : "Update Teacher Details"}
-              </CardTitle>
-              <CardDescription>
-                {formMode === "create"
-                  ? "Enter personal information and create login credentials."
-                  : "Modify directory details or reset password."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form className="space-y-6" onSubmit={handleTeacherSubmit}>
-                <div className="grid gap-6 md:grid-cols-2">
-                  <FormField label="First Name" id="teacher-firstName" error={teacherFieldErrors.firstName}>
-                    <Input
-                      id="teacher-firstName"
-                      placeholder="Jane"
-                      value={teacherValues.firstName}
-                      onChange={(event) =>
-                        setTeacherValues((current) => ({ ...current, firstName: event.target.value }))
-                      }
-                    />
-                  </FormField>
+      {/* Teacher Form Modal */}
+      <Dialog isOpen={isFormOpen} onClose={() => setIsFormOpen(false)} size="xl" title={formMode === "create" ? "Add Staff Member" : "Update Staff Profile"}>
+        <form className="space-y-8" onSubmit={handleTeacherSubmit}>
+          <div className="grid gap-8 lg:grid-cols-2">
+            <div className="space-y-6">
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-text-secondary/60">Personal Details</h3>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FormField label="First Name" error={teacherFieldErrors.firstName}><Input value={teacherValues.firstName} onChange={e => setTeacherValues(c => ({...c, firstName: e.target.value}))} className="h-10" /></FormField>
+                <FormField label="Last Name" error={teacherFieldErrors.lastName}><Input value={teacherValues.lastName} onChange={e => setTeacherValues(c => ({...c, lastName: e.target.value}))} className="h-10" /></FormField>
+              </div>
+              <FormField label="Employee Number" error={teacherFieldErrors.employeeNumber}><Input value={teacherValues.employeeNumber} onChange={e => setTeacherValues(c => ({...c, employeeNumber: e.target.value}))} className="h-10 font-bold" /></FormField>
+            </div>
+            <div className="space-y-6">
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-text-secondary/60">Authentication</h3>
+              <FormField label="Email Address" error={teacherFieldErrors.email}><Input type="email" value={teacherValues.email} onChange={e => setTeacherValues(c => ({...c, email: e.target.value}))} className="h-10" /></FormField>
+              <FormField label={formMode === "create" ? "Initial Password" : "Reset Password"} error={teacherFieldErrors.password}><Input type="password" value={teacherValues.password} onChange={e => setTeacherValues(c => ({...c, password: e.target.value}))} placeholder="Min 8 characters" className="h-10" /></FormField>
+            </div>
+          </div>
+          {teacherFormError && <div className="rounded-xl border border-error/20 bg-error/5 p-3 text-[10px] font-black uppercase text-error tracking-widest">{teacherFormError}</div>}
+          <div className="flex items-center justify-end gap-3 border-t border-border-subtle pt-6">
+            <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)} className="h-10 px-6 font-black uppercase tracking-widest text-[10px]">Cancel</Button>
+            <PrimaryButton type="submit" disabled={isSubmittingTeacher} className="h-10 px-10 font-black uppercase tracking-widest text-[10px]">{isSubmittingTeacher ? "Saving..." : "Commit Profile"}</PrimaryButton>
+          </div>
+        </form>
+      </Dialog>
 
-                  <FormField label="Last Name" id="teacher-lastName" error={teacherFieldErrors.lastName}>
-                    <Input
-                      id="teacher-lastName"
-                      placeholder="Doe"
-                      value={teacherValues.lastName}
-                      onChange={(event) =>
-                        setTeacherValues((current) => ({ ...current, lastName: event.target.value }))
-                      }
-                    />
-                  </FormField>
-                </div>
-
-                <FormField label="Employee ID" id="teacher-employeeNumber" error={teacherFieldErrors.employeeNumber}>
-                  <Input
-                    id="teacher-employeeNumber"
-                    placeholder="EMP-001"
-                    value={teacherValues.employeeNumber}
-                    onChange={(event) =>
-                      setTeacherValues((current) => ({ ...current, employeeNumber: event.target.value }))
-                    }
-                  />
-                </FormField>
-
-                <FormField label="Email Address" id="teacher-email" error={teacherFieldErrors.email}>
-                  <Input
-                    id="teacher-email"
-                    type="email"
-                    placeholder="jane.doe@school.edu"
-                    value={teacherValues.email}
-                    onChange={(event) => setTeacherValues((current) => ({ ...current, email: event.target.value }))}
-                  />
-                </FormField>
-
-                <FormField 
-                  label={formMode === "create" ? "Initial Password" : "Reset Password"} 
-                  id="teacher-password" 
-                  error={teacherFieldErrors.password}
-                >
-                  <Input
-                    id="teacher-password"
-                    type="password"
-                    value={teacherValues.password}
-                    onChange={(event) => setTeacherValues((current) => ({ ...current, password: event.target.value }))}
-                    placeholder={formMode === "edit" ? "Leave blank to keep existing" : "Minimum 8 characters"}
-                  />
-                </FormField>
-
-                {teacherFormError ? (
-                  <div className="rounded-xl border border-error/20 bg-error/10 p-4 text-sm font-medium text-error">
-                    {teacherFormError}
-                  </div>
-                ) : null}
-
-                <div className="flex flex-wrap items-center gap-3">
-                  <PrimaryButton type="submit" disabled={isSubmittingTeacher}>
-                    {isSubmittingTeacher ? "Saving..." : formMode === "create" ? "Create Teacher" : "Save Changes"}
-                  </PrimaryButton>
-                  {formMode === "edit" ? (
-                    <Button type="button" variant="outline" onClick={resetTeacherForm}>
-                      Cancel
-                    </Button>
-                  ) : null}
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="lg:col-span-5">
-          <Card>
-            <CardHeader>
-              <CardTitle>Stream & Subject Scope</CardTitle>
-              <CardDescription>
-                Assign teachers to specific streams and subjects for mark entry.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isSetupLoading ? (
-                <div className="pb-4 text-sm text-text-secondary">Loading class data...</div>
-              ) : null}
-              {setupError ? (
-                <div className="pb-4 text-sm font-medium text-error">{setupError}</div>
-              ) : null}
-
-              <form className="space-y-5" onSubmit={handleAssignmentSubmit}>
-                <FormField label="Teacher" id="assignment-teacherId" error={assignmentFieldErrors.teacherId}>
-                  <Select
-                    id="assignment-teacherId"
-                    value={assignmentValues.teacherId}
-                    onChange={(event) => handleAssignmentChange("teacherId", event.target.value)}
-                    disabled={teachers.length === 0}
-                  >
-                    <option value="">Select a teacher...</option>
-                    {teachers.map((teacher) => (
-                      <option key={teacher.id} value={teacher.id}>
-                        {teacher.firstName} {teacher.lastName} ({teacher.employeeNumber})
-                      </option>
-                    ))}
-                  </Select>
-                </FormField>
-
-                <FormField label="Class" id="assignment-classId" error={assignmentFieldErrors.classId}>
-                  <Select
-                    id="assignment-classId"
-                    value={assignmentValues.classId}
-                    onChange={(event) => handleAssignmentChange("classId", event.target.value)}
-                    disabled={!sortedClasses.length}
-                  >
-                    <option value="">Select a class...</option>
-                    {sortedClasses.map((schoolClass) => (
-                      <option key={schoolClass.id} value={schoolClass.id}>
-                        {schoolClass.name}
-                      </option>
-                    ))}
-                  </Select>
-                </FormField>
-
-                <div className="grid gap-5">
-                  <FormField label="Stream" id="assignment-streamId" error={assignmentFieldErrors.streamId}>
-                    <Select
-                      id="assignment-streamId"
-                      value={assignmentValues.streamId}
-                      onChange={(event) => handleAssignmentChange("streamId", event.target.value)}
-                      disabled={!availableStreams.length}
-                    >
-                      <option value="">Select a stream...</option>
-                      {availableStreams.map((stream) => (
-                        <option key={stream.id} value={stream.id}>
-                          {stream.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </FormField>
-
-                  <FormField label="Subject" id="assignment-subjectId" error={assignmentFieldErrors.subjectId}>
-                    <Select
-                      id="assignment-subjectId"
-                      value={assignmentValues.subjectId}
-                      onChange={(event) => handleAssignmentChange("subjectId", event.target.value)}
-                      disabled={!availableSubjects.length}
-                    >
-                      <option value="">Select a subject...</option>
-                      {availableSubjects.map((subject) => (
-                        <option key={subject.id} value={subject.id}>
-                          {subject.name} ({subject.code})
-                        </option>
-                      ))}
-                    </Select>
-                  </FormField>
-                </div>
-
-                {assignmentError ? (
-                  <div className="rounded-xl border border-error/20 bg-error/10 p-4 text-sm font-medium text-error">
-                    {assignmentError}
-                  </div>
-                ) : null}
-
-                {assignmentSuccess ? (
-                  <div className="rounded-xl border border-secondary/20 bg-secondary-light/30 p-4 text-sm font-medium text-secondary">
-                    {assignmentSuccess}
-                  </div>
-                ) : null}
-
-                <div className="pt-2">
-                  <PrimaryButton
-                    type="submit"
-                    className="w-full"
-                    disabled={
-                      isSubmittingAssignment || !teachers.length || !sortedClasses.length || !assignmentValues.teacherId || !assignmentValues.streamId || !assignmentValues.subjectId
-                    }
-                  >
-                    {isSubmittingAssignment ? "Assigning Scope..." : "Assign Scope"}
-                  </PrimaryButton>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      {/* Assignment Modal */}
+      <Dialog isOpen={isAssignOpen} onClose={() => setIsAssignOpen(false)} size="lg" title="Scope Assignment" description="Assign teachers to specific streams and subjects.">
+        <form className="space-y-6" onSubmit={handleAssignmentSubmit}>
+          <FormField label="Teacher" error={assignmentFieldErrors.teacherId}>
+            <Select value={assignmentValues.teacherId} onChange={e => handleAssignmentChange("teacherId", e.target.value)} className="h-11">
+              <option value="">Select teacher...</option>
+              {teachers.map(t => <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>)}
+            </Select>
+          </FormField>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <FormField label="Class"><Select value={assignmentValues.classId} onChange={e => handleAssignmentChange("classId", e.target.value)}>{option => null}<option value="">Choose...</option>{sortedClasses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></FormField>
+            <FormField label="Stream"><Select value={assignmentValues.streamId} onChange={e => handleAssignmentChange("streamId", e.target.value)} disabled={!availableStreams.length}><option value="">Choose...</option>{availableStreams.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></FormField>
+            <FormField label="Subject"><Select value={assignmentValues.subjectId} onChange={e => handleAssignmentChange("subjectId", e.target.value)} disabled={!availableSubjects.length}><option value="">Choose...</option>{availableSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></FormField>
+          </div>
+          {assignmentError && <div className="rounded-xl border border-error/20 bg-error/5 p-3 text-[10px] font-black uppercase text-error">{assignmentError}</div>}
+          {assignmentSuccess && <div className="rounded-xl border border-secondary/20 bg-secondary-light/30 p-3 text-[10px] font-black uppercase text-secondary">{assignmentSuccess}</div>}
+          <div className="flex items-center justify-end gap-3 border-t border-border-subtle pt-6">
+            <Button type="button" variant="outline" onClick={() => setIsAssignOpen(false)} className="h-10 px-6 font-black uppercase tracking-widest text-[10px]">Close</Button>
+            <PrimaryButton type="submit" disabled={isSubmittingAssignment} className="h-10 px-10 font-black uppercase tracking-widest text-[10px]">Confirm Scope</PrimaryButton>
+          </div>
+        </form>
+      </Dialog>
     </div>
   );
 }

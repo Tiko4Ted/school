@@ -2,123 +2,63 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
-import { Button, PrimaryButton } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button, PrimaryButton } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
+
+type ExamConfiguration = {
+  id: string;
+  class: { id: string; name: string };
+  subject: { id: string; name: string; code: string };
+};
 
 type ExamRecord = {
   id: string;
   name: string;
   startDate: string;
   endDate: string | null;
-  term: {
-    id: string;
-    name: string;
-    academicYear: { id: string; name: string };
-  };
-  configurations: {
-    id: string;
-    class: { id: string; name: string };
-    subject: { id: string; name: string; code: string };
-  }[];
+  term: { id: string; name: string; academicYear: { id: string; name: string } };
+  configurations: ExamConfiguration[];
 };
 
-type SetupClass = {
-  id: string;
-  name: string;
-  level: number;
-  classSubjects: {
-    id: string;
-    subject: {
-      id: string;
-      name: string;
-      code: string;
-    };
-  }[];
+type SetupData = {
+  classes: { id: string; name: string; classSubjects: { subject: { id: string; name: string; code: string } }[] }[];
+  academicYears: { id: string; name: string; terms: { id: string; name: string }[] }[];
 };
 
-type SetupResponse = {
-  classes: SetupClass[];
-  academicYears: {
-    id: string;
-    name: string;
-    terms: {
-      id: string;
-      name: string;
-      startDate: string;
-      endDate: string;
-      isActive: boolean;
-    }[];
-  }[];
-};
-
-type ExamConfigRow = {
-  subject: { id: string };
-};
-
-const examFormSchema = z
-  .object({
-    termId: z.string().uuid("Select a term."),
-    name: z.string().trim().min(2, "Exam name is required."),
-    startDate: z.string().trim().min(1, "Start date is required."),
-    endDate: z.string().trim().optional(),
-  })
-  .refine(
-    (data) => {
-      if (data.endDate) {
-        return data.endDate >= data.startDate;
-      }
-      return true;
-    },
-    { message: "End date must be on or after start date.", path: ["endDate"] },
-  );
-
-const configurationSchema = z.object({
-  classId: z.string().uuid("Select a class."),
-  subjectIds: z.array(z.string().uuid()).min(1, "Select at least one subject."),
+const examSchema = z.object({
+  termId: z.string().uuid("Select a term."),
+  name: z.string().trim().min(2, "Exam name is required."),
+  startDate: z.string().trim().min(1, "Start date is required."),
+  endDate: z.string().trim().optional(),
 });
-
-function formatDate(value: string | null) {
-  if (!value) {
-    return "";
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-  return date.toISOString().slice(0, 10);
-}
 
 export function ExamsManager() {
   const [exams, setExams] = useState<ExamRecord[]>([]);
   const [isLoadingExams, setIsLoadingExams] = useState(true);
   const [examsError, setExamsError] = useState<string | null>(null);
 
-  const [setup, setSetup] = useState<SetupResponse>({ classes: [], academicYears: [] });
-  const [setupError, setSetupError] = useState<string | null>(null);
+  const [setup, setSetup] = useState<SetupData | null>(null);
+  const [isSetupLoading, setIsSetupLoading] = useState(true);
+
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
   const [editingExamId, setEditingExamId] = useState<string | null>(null);
-  const [examValues, setExamValues] = useState({
-    termId: "",
-    name: "",
-    startDate: "",
-    endDate: "",
-  });
+  const [examValues, setExamValues] = useState({ termId: "", name: "", startDate: "", endDate: "" });
   const [examFieldErrors, setExamFieldErrors] = useState<Record<string, string>>({});
-  const [examFormError, setExamFormError] = useState<string | null>(null);
   const [isSubmittingExam, setIsSubmittingExam] = useState(false);
 
-  const [configurationExamId, setConfigurationExamId] = useState("");
-  const [configurationClassId, setConfigurationClassId] = useState("");
+  const [configExamId, setConfigExamId] = useState<string | null>(null);
+  const [selectedClassId, setSelectedClassId] = useState("");
   const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>([]);
-  const [configurationError, setConfigurationError] = useState<string | null>(null);
-  const [configurationSuccess, setConfigurationSuccess] = useState<string | null>(null);
-  const [isLoadingConfiguration, setIsLoadingConfiguration] = useState(false);
-  const [isSavingConfiguration, setIsSavingConfiguration] = useState(false);
+  const [isSubmittingConfig, setIsSubmittingConfig] = useState(false);
 
   useEffect(() => {
     void loadExams();
@@ -127,59 +67,26 @@ export function ExamsManager() {
 
   async function loadExams() {
     setIsLoadingExams(true);
-    setExamsError(null);
     const response = await fetch("/api/exams", { cache: "no-store" });
-    const payload = (await response.json().catch(() => null)) as { data?: ExamRecord[]; error?: string } | null;
-
-    if (!response.ok) {
-      setExamsError(payload?.error ?? "Failed to load exams.");
-      setIsLoadingExams(false);
-      return;
-    }
-
-    setExams(payload?.data ?? []);
+    const payload = await response.json();
+    if (response.ok) setExams(payload.data ?? []);
+    else setExamsError(payload.error ?? "Failed to load exams.");
     setIsLoadingExams(false);
   }
 
   async function loadSetupData() {
     const response = await fetch("/api/setup", { cache: "no-store" });
-    const payload = (await response.json().catch(() => null)) as { data?: SetupResponse; error?: string } | null;
-
-    if (!response.ok) {
-      setSetupError(payload?.error ?? "Failed to load setup data.");
-      return;
-    }
-
-    setSetup({
-      classes: payload?.data?.classes ?? [],
-      academicYears: payload?.data?.academicYears ?? [],
-    });
+    const payload = await response.json();
+    if (response.ok) setSetup(payload.data);
+    setIsSetupLoading(false);
   }
 
-  const termOptions = useMemo(() => {
-    return setup.academicYears.flatMap((year) =>
-      year.terms.map((term) => ({
-        id: term.id,
-        label: `${year.name} · ${term.name}`,
-      })),
-    );
-  }, [setup.academicYears]);
-
-  const sortedClasses = useMemo(() => {
-    return [...setup.classes].sort((a, b) => a.level - b.level);
-  }, [setup.classes]);
-
-  function resetExamForm() {
+  function resetForm() {
     setFormMode("create");
     setEditingExamId(null);
-    setExamValues({
-      termId: "",
-      name: "",
-      startDate: "",
-      endDate: "",
-    });
+    setExamValues({ termId: "", name: "", startDate: "", endDate: "" });
     setExamFieldErrors({});
-    setExamFormError(null);
+    setIsFormOpen(false);
   }
 
   function handleEditExam(exam: ExamRecord) {
@@ -188,416 +95,145 @@ export function ExamsManager() {
     setExamValues({
       termId: exam.term.id,
       name: exam.name,
-      startDate: formatDate(exam.startDate),
-      endDate: formatDate(exam.endDate),
+      startDate: exam.startDate.split('T')[0],
+      endDate: exam.endDate ? exam.endDate.split('T')[0] : "",
     });
-    setExamFieldErrors({});
-    setExamFormError(null);
+    setIsFormOpen(true);
   }
 
-  async function handleExamSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function handleExamSubmit(e: React.FormEvent) {
+    e.preventDefault();
     setIsSubmittingExam(true);
-    setExamFormError(null);
-    setExamFieldErrors({});
-
-    const parsed = examFormSchema.safeParse(examValues);
-
+    const parsed = examSchema.safeParse(examValues);
     if (!parsed.success) {
-      const fieldErrors = parsed.error.flatten().fieldErrors;
-      setExamFieldErrors({
-        termId: fieldErrors.termId?.[0] ?? "",
-        name: fieldErrors.name?.[0] ?? "",
-        startDate: fieldErrors.startDate?.[0] ?? "",
-        endDate: fieldErrors.endDate?.[0] ?? "",
-      });
+      setExamFieldErrors(parsed.error.flatten().fieldErrors as any);
       setIsSubmittingExam(false);
       return;
     }
 
-    const endpoint = formMode === "create" ? "/api/exams" : `/api/exams/${editingExamId}`;
     const method = formMode === "create" ? "POST" : "PATCH";
-
+    const endpoint = formMode === "create" ? "/api/exams" : `/api/exams/${editingExamId}`;
     const response = await fetch(endpoint, {
       method,
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(parsed.data),
     });
 
-    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-
-    if (!response.ok) {
-      setExamFormError(payload?.error ?? "Failed to save exam.");
-      setIsSubmittingExam(false);
-      return;
+    if (response.ok) {
+      await loadExams();
+      resetForm();
     }
-
-    await loadExams();
-    resetExamForm();
     setIsSubmittingExam(false);
   }
 
-  function handleSubjectToggle(subjectId: string) {
-    setSelectedSubjectIds((current) =>
-      current.includes(subjectId) ? current.filter((id) => id !== subjectId) : [...current, subjectId],
-    );
-  }
-
-  async function handleLoadConfiguration(examId: string, classId: string) {
-    if (!examId || !classId) {
-      setSelectedSubjectIds([]);
-      return;
-    }
-
-    setIsLoadingConfiguration(true);
-    setConfigurationError(null);
-    const response = await fetch(`/api/exams/${examId}/configurations?classId=${classId}`, { cache: "no-store" });
-    const payload = (await response.json().catch(() => null)) as { data?: ExamConfigRow[]; error?: string } | null;
-
-    if (!response.ok) {
-      setConfigurationError(payload?.error ?? "Failed to load configuration.");
-      setIsLoadingConfiguration(false);
-      return;
-    }
-
-    setSelectedSubjectIds((payload?.data ?? []).map((item) => item.subject.id));
-    setIsLoadingConfiguration(false);
-  }
-
-  async function handleConfigurationSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!configurationExamId || !configurationClassId) {
-      setConfigurationError("Select an exam and class before configuring subjects.");
-      return;
-    }
-
-    setIsSavingConfiguration(true);
-    setConfigurationError(null);
-    setConfigurationSuccess(null);
-
-    const parsed = configurationSchema.safeParse({
-      classId: configurationClassId,
-      subjectIds: selectedSubjectIds,
-    });
-
-    if (!parsed.success) {
-      const errorMessage = parsed.error.flatten().formErrors[0] ?? parsed.error.flatten().fieldErrors.subjectIds?.[0];
-      setConfigurationError(errorMessage ?? "Invalid configuration.");
-      setIsSavingConfiguration(false);
-      return;
-    }
-
-    const response = await fetch(`/api/exams/${configurationExamId}/configurations`, {
+  async function handleConfigSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!configExamId || !selectedClassId || !selectedSubjectIds.length) return;
+    setIsSubmittingConfig(true);
+    const response = await fetch(`/api/exams/${configExamId}/configurations`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(parsed.data),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ classId: selectedClassId, subjectIds: selectedSubjectIds }),
     });
-
-    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-
-    if (!response.ok) {
-      setConfigurationError(payload?.error ?? "Failed to save configuration.");
-      setIsSavingConfiguration(false);
-      return;
+    if (response.ok) {
+      await loadExams();
+      setIsConfigOpen(false);
     }
-
-    setConfigurationSuccess("Subjects saved for this class.");
-    await loadExams();
-    await handleLoadConfiguration(configurationExamId, configurationClassId);
-    setIsSavingConfiguration(false);
+    setIsSubmittingConfig(false);
   }
 
-  useEffect(() => {
-    if (configurationExamId && configurationClassId) {
-      void handleLoadConfiguration(configurationExamId, configurationClassId);
-    } else {
-      setSelectedSubjectIds([]);
-    }
-  }, [configurationExamId, configurationClassId]);
-
-  const selectedClassSubjects = useMemo(() => {
-    return setup.classes.find((cls) => cls.id === configurationClassId)?.classSubjects ?? [];
-  }, [configurationClassId, setup.classes]);
+  const termOptions = useMemo(() => {
+    return setup?.academicYears.flatMap(y => y.terms.map(t => ({ id: t.id, label: `${y.name} - ${t.name}` }))) ?? [];
+  }, [setup]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 pb-20">
       <Card>
-        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-b border-border-subtle bg-background/50 py-6">
           <div className="space-y-1">
-            <CardTitle>Exam Schedule</CardTitle>
-            <CardDescription>
-              Review all exams, linked terms, and class-subject scopes before marks entry opens.
-            </CardDescription>
+            <CardTitle className="text-xl">Examination Periods</CardTitle>
+            <CardDescription>Schedule institutional assessments and configure class-wise subject scopes.</CardDescription>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void loadExams()}
-          >
-            Refresh list
-          </Button>
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={loadExams} className="h-10 px-6 font-bold uppercase text-[10px]">Refresh</Button>
+            <PrimaryButton onClick={() => { resetForm(); setIsFormOpen(true); }} className="h-10 px-6 font-bold uppercase text-[10px]">New Exam</PrimaryButton>
+          </div>
         </CardHeader>
-        <CardContent>
-          {isLoadingExams ? (
-            <p className="py-8 text-center text-sm text-text-secondary">Loading exams...</p>
-          ) : examsError ? (
-            <p className="py-8 text-center text-sm text-error">{examsError}</p>
-          ) : (
+        <CardContent className="p-0">
+          {isLoadingExams ? <p className="py-20 text-center text-[10px] font-black uppercase text-text-secondary animate-pulse">Synchronizing Data...</p> : (
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Exam</TableHead>
-                  <TableHead>Term</TableHead>
-                  <TableHead>Dates</TableHead>
-                  <TableHead>Configurations</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
+              <TableHeader><TableRow className="bg-background/80">
+                <TableHead className="py-3">Assessment Name</TableHead>
+                <TableHead className="py-3">Term Cycle</TableHead>
+                <TableHead className="py-3">Schedule</TableHead>
+                <TableHead className="py-3 text-right pr-8">Actions</TableHead>
+              </TableRow></TableHeader>
               <TableBody>
-                {exams.map((exam) => {
-                  const classGroups = exam.configurations.reduce<Record<string, { className: string; subjects: string[] }>>(
-                    (acc, config) => {
-                      const key = config.class.id;
-                      if (!acc[key]) {
-                        acc[key] = { className: config.class.name, subjects: [] };
-                      }
-                      acc[key].subjects.push(config.subject.name);
-                      return acc;
-                    },
-                    {},
-                  );
-                  return (
-                    <TableRow key={exam.id}>
-                      <TableCell className="font-semibold text-text-primary">{exam.name}</TableCell>
-                      <TableCell>
-                        {exam.term.academicYear.name} · {exam.term.name}
-                      </TableCell>
-                      <TableCell>
-                        {formatDate(exam.startDate)}{" "}
-                        {exam.endDate ? (
-                          <>
-                            – {formatDate(exam.endDate)}
-                          </>
-                        ) : null}
-                      </TableCell>
-                      <TableCell>
-                        {Object.keys(classGroups).length === 0 ? (
-                          <span className="text-text-secondary italic">Not configured</span>
-                        ) : (
-                          <ul className="space-y-1">
-                            {Object.values(classGroups).map((group) => (
-                              <li key={group.className}>
-                                <span className="font-semibold text-text-primary">{group.className}:</span> {group.subjects.join(", ")}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => handleEditExam(exam)}
-                        >
-                          Edit
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {exams.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="py-12 text-center text-text-secondary">
-                      No exams found.
+                {exams.map((exam) => (
+                  <TableRow key={exam.id} className="group hover:bg-primary-light/5 transition-colors">
+                    <TableCell className="py-2"><span className="text-[13px] font-black text-text-primary uppercase tracking-tight">{exam.name}</span></TableCell>
+                    <TableCell className="py-2 text-[11px] font-bold text-text-secondary">{exam.term.academicYear.name} · {exam.term.name}</TableCell>
+                    <TableCell className="py-2"><span className="text-[10px] font-black uppercase text-primary bg-primary-light/50 px-2 py-0.5 rounded-lg border border-primary/20">{new Date(exam.startDate).toLocaleDateString()}</span></TableCell>
+                    <TableCell className="py-2 pr-8 text-right relative">
+                      <button onClick={() => setOpenMenuId(openMenuId === exam.id ? null : exam.id)} className="rounded-xl p-2 text-text-secondary hover:bg-slate-100"><svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" /></svg></button>
+                      {openMenuId === exam.id && (
+                        <><div className="fixed inset-0 z-20" onClick={() => setOpenMenuId(null)} />
+                        <div className="absolute right-8 top-10 z-30 w-44 rounded-xl border border-border-subtle bg-card p-1 shadow-2xl dark:bg-card-dark text-left">
+                          <button onClick={() => { handleEditExam(exam); setOpenMenuId(null); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-black uppercase text-text-primary hover:bg-primary-light/50 transition-colors">Edit Schedule</button>
+                          <button onClick={() => { setConfigExamId(exam.id); setIsConfigOpen(true); setOpenMenuId(null); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-black uppercase text-secondary hover:bg-secondary-light/50 transition-colors">Manage Scope</button>
+                        </div></>
+                      )}
                     </TableCell>
                   </TableRow>
-                ) : null}
+                ))}
               </TableBody>
             </Table>
           )}
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>{formMode === "create" ? "New Exam" : "Update Exam Details"}</CardTitle>
-            <CardDescription>
-              Link exams to academic terms and keep timelines accurate.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-5" onSubmit={handleExamSubmit}>
-              <FormField label="Term" error={examFieldErrors.termId}>
-                <Select
-                  id="exam-term"
-                  value={examValues.termId}
-                  onChange={(event) => setExamValues((current) => ({ ...current, termId: event.target.value }))}
-                >
-                  <option value="">Select term</option>
-                  {termOptions.map((term) => (
-                    <option key={term.id} value={term.id}>
-                      {term.label}
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
+      <Dialog isOpen={isFormOpen} onClose={resetForm} size="lg" title={formMode === "create" ? "Create Assessment" : "Modify Schedule"}>
+        <form className="space-y-6" onSubmit={handleExamSubmit}>
+          <div className="grid gap-6 md:grid-cols-2">
+            <FormField label="Target Term Cycle"><Select value={examValues.termId} onChange={e => setExamValues(c => ({...c, termId: e.target.value}))} className="h-11"><option value="">Select cycle...</option>{termOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</Select></FormField>
+            <FormField label="Assessment Name"><Input value={examValues.name} onChange={e => setExamValues(c => ({...c, name: e.target.value}))} placeholder="e.g. End of Term II" className="h-11 font-bold" /></FormField>
+          </div>
+          <div className="grid gap-6 md:grid-cols-2">
+            <FormField label="Start Date"><Input type="date" value={examValues.startDate} onChange={e => setExamValues(c => ({...c, startDate: e.target.value}))} className="h-11" /></FormField>
+            <FormField label="Completion Date (Optional)"><Input type="date" value={examValues.endDate} onChange={e => setExamValues(c => ({...c, endDate: e.target.value}))} className="h-11" /></FormField>
+          </div>
+          <div className="flex items-center justify-end gap-3 border-t border-border-subtle pt-6">
+            <Button type="button" variant="outline" onClick={resetForm} className="h-11 px-8 font-black uppercase tracking-widest text-[10px]">Cancel</Button>
+            <PrimaryButton type="submit" disabled={isSubmittingExam} className="h-11 px-10 font-black uppercase tracking-widest text-[10px] shadow-soft">{isSubmittingExam ? "Processing..." : "Commit Assessment"}</PrimaryButton>
+          </div>
+        </form>
+      </Dialog>
 
-              <FormField label="Name" error={examFieldErrors.name}>
-                <Input
-                  id="exam-name"
-                  value={examValues.name}
-                  onChange={(event) => setExamValues((current) => ({ ...current, name: event.target.value }))}
-                  placeholder="e.g., End of Term 1"
-                />
-              </FormField>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <FormField label="Start Date" error={examFieldErrors.startDate}>
-                  <Input
-                    id="exam-start"
-                    type="date"
-                    value={examValues.startDate}
-                    onChange={(event) => setExamValues((current) => ({ ...current, startDate: event.target.value }))}
-                  />
-                </FormField>
-                <FormField label="End Date (Optional)" error={examFieldErrors.endDate}>
-                  <Input
-                    id="exam-end"
-                    type="date"
-                    value={examValues.endDate}
-                    onChange={(event) => setExamValues((current) => ({ ...current, endDate: event.target.value }))}
-                  />
-                </FormField>
+      <Dialog isOpen={isConfigOpen} onClose={() => setIsConfigOpen(false)} size="xl" title="Subject Scope Configuration" description="Determine which classes and subjects are included in this assessment period.">
+        <form className="space-y-8" onSubmit={handleConfigSubmit}>
+          <div className="grid gap-8 lg:grid-cols-3">
+            <div className="lg:col-span-1"><FormField label="Target Class"><Select value={selectedClassId} onChange={e => { setSelectedClassId(e.target.value); setSelectedSubjectIds([]); }} className="h-11 font-bold"><option value="">Choose class...</option>{setup?.classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></FormField></div>
+            <div className="lg:col-span-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-text-secondary/60 mb-4 ml-1">Available Subjects</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {setup?.classes.find(c => c.id === selectedClassId)?.classSubjects.map(cs => {
+                  const active = selectedSubjectIds.includes(cs.subject.id);
+                  return (
+                    <label key={cs.subject.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${active ? 'border-primary bg-primary-light/30 shadow-soft ring-2 ring-primary/5' : 'border-border-subtle hover:border-primary/20'}`}>
+                      <input type="checkbox" checked={active} onChange={() => setSelectedSubjectIds(c => active ? c.filter(id => id !== cs.subject.id) : [...c, cs.subject.id])} className="h-4 w-4 rounded border-border-subtle text-primary focus:ring-primary" />
+                      <span className={`text-[11px] font-black uppercase tracking-tight ${active ? 'text-primary' : 'text-text-primary'}`}>{cs.subject.name} <span className="text-text-secondary/40 font-bold">({cs.subject.code})</span></span>
+                    </label>
+                  );
+                })}
               </div>
-
-              {examFormError ? (
-                <div className="rounded-xl border border-error/20 bg-error/5 p-4 text-sm text-error">{examFormError}</div>
-              ) : null}
-
-              <div className="flex flex-wrap gap-3 pt-2">
-                <PrimaryButton type="submit" disabled={isSubmittingExam}>
-                  {isSubmittingExam ? "Saving..." : formMode === "create" ? "Create Exam" : "Save Changes"}
-                </PrimaryButton>
-                {formMode === "edit" ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={resetExamForm}
-                  >
-                    Cancel
-                  </Button>
-                ) : null}
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Class Subject Scope</CardTitle>
-            <CardDescription>
-              Align each exam with the exact class/subject mix allowed for marks entry.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-5" onSubmit={handleConfigurationSubmit}>
-              <FormField label="Exam">
-                <Select
-                  id="config-exam"
-                  value={configurationExamId}
-                  onChange={(event) => {
-                    setConfigurationExamId(event.target.value);
-                    setConfigurationSuccess(null);
-                  }}
-                >
-                  <option value="">Select exam</option>
-                  {exams.map((exam) => (
-                    <option key={exam.id} value={exam.id}>
-                      {exam.name} ({exam.term.academicYear.name} · {exam.term.name})
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
-
-              <FormField label="Class">
-                <Select
-                  id="config-class"
-                  value={configurationClassId}
-                  onChange={(event) => {
-                    setConfigurationClassId(event.target.value);
-                    setConfigurationSuccess(null);
-                  }}
-                  disabled={!configurationExamId}
-                >
-                  <option value="">Select class</option>
-                  {sortedClasses.map((cls) => (
-                    <option key={cls.id} value={cls.id}>
-                      {cls.name}
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
-
-              {isLoadingConfiguration ? (
-                <p className="text-sm text-text-secondary animate-pulse">Loading configuration...</p>
-              ) : null}
-
-              <div className="space-y-3">
-                <p className="text-sm font-semibold text-text-primary">Subjects</p>
-                {selectedClassSubjects.length === 0 ? (
-                  <p className="text-sm text-text-secondary italic">Select a class to view its mapped subjects.</p>
-                ) : (
-                  <div className="grid gap-2">
-                    {selectedClassSubjects.map((item) => (
-                      <label
-                        key={item.subject.id}
-                        className="flex cursor-pointer items-center gap-3 rounded-xl border border-border-subtle bg-background/50 px-4 py-2.5 text-sm text-text-primary transition hover:bg-primary-light/10"
-                      >
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 rounded border-border-subtle text-primary focus:ring-primary"
-                          checked={selectedSubjectIds.includes(item.subject.id)}
-                          onChange={() => handleSubjectToggle(item.subject.id)}
-                        />
-                        <span>{item.subject.name} ({item.subject.code})</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {configurationError ? (
-                <div className="rounded-xl border border-error/20 bg-error/5 p-4 text-sm text-error">{configurationError}</div>
-              ) : null}
-
-              {configurationSuccess ? (
-                <div className="rounded-xl border border-success/20 bg-success/5 p-4 text-sm text-success">
-                  {configurationSuccess}
-                </div>
-              ) : null}
-
-              <div className="pt-2">
-                <PrimaryButton
-                  type="submit"
-                  className="w-full md:w-auto"
-                  disabled={!configurationExamId || !configurationClassId || isSavingConfiguration}
-                >
-                  {isSavingConfiguration ? "Saving..." : "Save Configuration"}
-                </PrimaryButton>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-
-      {setupError ? (
-        <div className="rounded-xl border border-warning/20 bg-warning/5 p-4 text-sm text-warning-dark">{setupError}</div>
-      ) : null}
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-3 border-t border-border-subtle pt-6">
+            <Button type="button" variant="outline" onClick={() => setIsConfigOpen(false)} className="h-11 px-8 font-black uppercase tracking-widest text-[10px]">Close</Button>
+            <PrimaryButton type="submit" disabled={isSubmittingConfig || !selectedSubjectIds.length} className="h-11 px-10 font-black uppercase tracking-widest text-[10px] shadow-soft">Update Scope</PrimaryButton>
+          </div>
+        </form>
+      </Dialog>
     </div>
   );
 }

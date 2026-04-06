@@ -8,6 +8,7 @@ import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog } from "@/components/ui/dialog";
 import { z } from "zod";
 
 type SetupData = {
@@ -43,12 +44,6 @@ type ReportRecord = {
   }[];
 };
 
-const publishFormSchema = z.object({
-  termId: z.string().uuid("Select a term."),
-  classId: z.string().uuid("Select a class."),
-  examIds: z.array(z.string().uuid()).min(1, "Select at least one exam.").max(3, "Maximum 3 exams."),
-});
-
 const remarkDraftSchema = z.object({
   remark: z.string().trim().min(3, "Remark must be at least 3 characters."),
   classTeacherName: z.string().trim().min(2).optional(),
@@ -60,15 +55,14 @@ export function ReportsManager() {
   const [reports, setReports] = useState<ReportRecord[]>([]);
 
   const [loadingData, setLoadingData] = useState(true);
-  const [dataError, setDataError] = useState<string | null>(null);
-
+  const [isPublishOpen, setIsPublishOpen] = useState(false);
+  const [isRemarksOpen, setIsRemarksOpen] = useState(false);
+  
   const [publishValues, setPublishValues] = useState({ termId: "", classId: "", examIds: [] as string[] });
-  const [publishMessage, setPublishMessage] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
 
-  const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
+  const [activeReportId, setActiveReportId] = useState<string | null>(null);
   const [remarkDrafts, setRemarkDrafts] = useState<Record<string, { remark: string; classTeacherName?: string }>>({});
-  const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [remarkErrors, setRemarkErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -77,48 +71,25 @@ export function ReportsManager() {
 
   async function loadInitialData() {
     setLoadingData(true);
-    setDataError(null);
-    try {
-      const [setupResponse, examsResponse, reportsResponse] = await Promise.all([
-        fetch("/api/setup", { cache: "no-store" }),
-        fetch("/api/exams", { cache: "no-store" }),
-        fetch("/api/reports", { cache: "no-store" }),
-      ]);
-      const setupPayload = (await setupResponse.json().catch(() => null)) as { data?: SetupData; error?: string } | null;
-      const examsPayload = (await examsResponse.json().catch(() => null)) as { data?: ExamRecord[]; error?: string } | null;
-      const reportsPayload = (await reportsResponse.json().catch(() => null)) as { data?: ReportRecord[]; error?: string } | null;
+    const [setupResponse, examsResponse, reportsResponse] = await Promise.all([
+      fetch("/api/setup", { cache: "no-store" }),
+      fetch("/api/exams", { cache: "no-store" }),
+      fetch("/api/reports", { cache: "no-store" }),
+    ]);
+    const setupPayload = await setupResponse.json();
+    const examsPayload = await examsResponse.json();
+    const reportsPayload = await reportsResponse.json();
 
-      if (!setupResponse.ok) {
-        setDataError(setupPayload?.error ?? "Failed to load setup data.");
-        return;
-      }
-      if (!examsResponse.ok) {
-        setDataError(examsPayload?.error ?? "Failed to load exams.");
-        return;
-      }
-      if (!reportsResponse.ok) {
-        setDataError(reportsPayload?.error ?? "Failed to load reports.");
-        return;
-      }
-
-      setSetup(setupPayload?.data ?? { classes: [], academicYears: [] });
-      setExams(examsPayload?.data ?? []);
-      setReports(reportsPayload?.data ?? []);
-    } catch (error) {
-      setDataError(error instanceof Error ? error.message : "Failed to load data.");
-    } finally {
-      setLoadingData(false);
-    }
+    setSetup(setupPayload.data);
+    setExams(examsPayload.data);
+    setReports(reportsPayload.data);
+    setLoadingData(false);
   }
 
   async function reloadReports() {
     const response = await fetch("/api/reports", { cache: "no-store" });
-    const payload = (await response.json().catch(() => null)) as { data?: ReportRecord[]; error?: string } | null;
-    if (!response.ok) {
-      setActionMessage(payload?.error ?? "Failed to refresh reports.");
-      return;
-    }
-    setReports(payload?.data ?? []);
+    const payload = await response.json();
+    setReports(payload.data ?? []);
   }
 
   const termOptions = setup.academicYears.flatMap((year) =>
@@ -128,459 +99,152 @@ export function ReportsManager() {
     })),
   );
 
-  const examOptions = useMemo(() => {
-    if (!publishValues.termId) {
-      return [];
-    }
-    return exams.filter((exam) => exam.term.id === publishValues.termId);
-  }, [exams, publishValues.termId]);
+  const examOptions = useMemo(() => exams.filter((exam) => exam.term.id === publishValues.termId), [exams, publishValues.termId]);
 
-  const publishValidation = publishFormSchema.safeParse(publishValues);
-
-  const publishFieldErrors =
-    publishValidation && !publishValidation.success ? publishValidation.error.flatten().fieldErrors : {};
-  const publishDisabled = isPublishing || !publishValidation.success;
-
-  async function handlePublish(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setPublishMessage(null);
-    setActionMessage(null);
-
-    if (!publishValidation.success) {
-      setPublishMessage(
-        publishValidation.error.flatten().formErrors[0] ?? "Fill in term, class, and at least one exam (max 3).",
-      );
-      return;
-    }
-
+  async function handlePublish() {
+    if (!publishValues.termId || !publishValues.classId || !publishValues.examIds.length) return;
     setIsPublishing(true);
-    const result = await publishReportAction(publishValidation.data);
+    const result = await publishReportAction(publishValues);
+    if (result.success) {
+      await reloadReports();
+      setIsPublishOpen(false);
+    }
     setIsPublishing(false);
-
-    if (!result.success) {
-      setPublishMessage(result.error ?? "Failed to publish report.");
-      return;
-    }
-
-    setPublishMessage("Report published.");
-    await reloadReports();
-  }
-
-  async function handleReopen(reportId: string) {
-    setActionMessage(null);
-    const result = await reopenReportAction({ reportId });
-    if (!result.success) {
-      setActionMessage(result.error ?? "Failed to reopen report.");
-      return;
-    }
-    setActionMessage("Report reopened.");
-    await reloadReports();
   }
 
   async function handleRemarkSave(reportId: string, studentId: string) {
-    setActionMessage(null);
     const key = `${reportId}:${studentId}`;
     const draft = remarkDrafts[key];
-    if (!draft) {
-      setActionMessage("No draft available.");
-      return;
-    }
-
-    const normalized = {
-      remark: draft.remark,
-      classTeacherName: draft.classTeacherName?.trim() ? draft.classTeacherName : undefined,
-    };
-    const parsed = remarkDraftSchema.safeParse(normalized);
-    if (!parsed.success) {
-      const message = parsed.error.flatten().formErrors[0] ?? "Remark must be at least 3 characters.";
-      setRemarkErrors((current) => ({ ...current, [key]: message }));
-      return;
-    }
+    if (!draft) return;
 
     const result = await updateRemarkAction({
       reportId,
       studentId,
-      remark: parsed.data.remark,
-      classTeacherName: parsed.data.classTeacherName,
+      remark: draft.remark,
+      classTeacherName: draft.classTeacherName || undefined,
     });
 
-    if (!result.success) {
-      setActionMessage(result.error ?? "Failed to update remark.");
-      return;
-    }
-
-    setActionMessage("Remark updated.");
-    setRemarkErrors((current) => {
-      const next = { ...current };
-      delete next[key];
-      return next;
-    });
-    await reloadReports();
+    if (result.success) await reloadReports();
   }
 
-  const pdfLink = (report: ReportRecord) => `/api/reports?reportId=${report.id}&format=pdf`;
+  const activeReport = useMemo(() => reports.find(r => r.id === activeReportId), [reports, activeReportId]);
 
   useEffect(() => {
-    if (expandedReportId) {
-      const report = reports.find((item) => item.id === expandedReportId);
-      if (report) {
-        const drafts: Record<string, { remark: string; classTeacherName?: string }> = {};
-        report.remarks.forEach((remark) => {
-          drafts[`${report.id}:${remark.studentId}`] = {
-            remark: remark.remark,
-            classTeacherName: remark.classTeacherName ?? "",
-          };
-        });
-        setRemarkDrafts(drafts);
-      }
+    if (activeReport) {
+      const drafts: Record<string, { remark: string; classTeacherName?: string }> = {};
+      activeReport.remarks.forEach((r) => {
+        drafts[`${activeReport.id}:${r.studentId}`] = { remark: r.remark, classTeacherName: r.classTeacherName ?? "" };
+      });
+      setRemarkDrafts(drafts);
     }
-  }, [expandedReportId, reports]);
+  }, [activeReport]);
 
   return (
-    <div className="space-y-10">
-      {/* Configuration Section */}
-      <Card className="border-none shadow-soft overflow-visible">
-        <CardHeader className="border-b border-border-subtle dark:border-border-dark bg-background/50 p-8">
-          <div className="flex items-center gap-4">
-            <div className="h-12 w-12 flex items-center justify-center rounded-2xl bg-primary-light/50 text-primary">
-              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-            </div>
-            <div>
-              <CardTitle className="text-2xl">Publish Reports</CardTitle>
-              <CardDescription className="text-sm font-medium">Configure and consolidate termly student performance reports.</CardDescription>
-            </div>
+    <div className="space-y-6 pb-20">
+      <Card>
+        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-b border-border-subtle bg-background/50 py-6">
+          <div className="space-y-1">
+            <CardTitle className="text-xl">Report Card Archive</CardTitle>
+            <CardDescription>Consolidated termly assessments and historical student reports.</CardDescription>
           </div>
-        </CardHeader>
-        <CardContent className="p-8">
-          {loadingData ? (
-            <div className="py-10 text-center">
-              <p className="text-sm font-bold uppercase tracking-widest text-text-secondary animate-pulse">Loading system parameters...</p>
-            </div>
-          ) : dataError ? (
-            <div className="rounded-xl border border-error/20 bg-error/5 p-4 text-sm font-bold text-error">
-              {dataError}
-            </div>
-          ) : (
-            <form className="space-y-8" onSubmit={handlePublish}>
-              <div className="grid gap-8 md:grid-cols-2">
-                <FormField label="Target Academic Term" error={publishFieldErrors.termId?.[0]}>
-                  <Select
-                    value={publishValues.termId}
-                    onChange={(event) =>
-                      setPublishValues((current) => ({
-                        ...current,
-                        termId: event.target.value,
-                        examIds: [],
-                      }))
-                    }
-                    className="h-12"
-                  >
-                    <option value="">Choose term...</option>
-                    {termOptions.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </Select>
-                </FormField>
-                <FormField label="Target Class" error={publishFieldErrors.classId?.[0]}>
-                  <Select
-                    value={publishValues.classId}
-                    onChange={(event) => setPublishValues((current) => ({ ...current, classId: event.target.value }))}
-                    className="h-12"
-                  >
-                    <option value="">Choose class...</option>
-                    {setup.classes
-                      .slice()
-                      .sort((a, b) => a.level - b.level)
-                      .map((cls) => (
-                        <option key={cls.id} value={cls.id}>
-                          {cls.name}
-                        </option>
-                      ))}
-                  </Select>
-                </FormField>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-text-secondary/60">Selected Assessment Periods</p>
-                  <span className="text-[10px] font-bold text-primary bg-primary-light/30 px-2 py-0.5 rounded-lg border border-primary-light/50">{publishValues.examIds.length} / 3 Selected</span>
-                </div>
-                
-                {examOptions.length === 0 ? (
-                  <div className="rounded-2xl border-2 border-dashed border-border-subtle dark:border-border-dark p-8 text-center bg-background/30">
-                    <p className="text-sm font-bold text-text-secondary/40 italic">Select an academic term first to view available exams.</p>
-                  </div>
-                ) : (
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {examOptions.map((exam) => {
-                      const selected = publishValues.examIds.includes(exam.id);
-                      return (
-                        <label
-                          key={exam.id}
-                          className={`flex cursor-pointer items-center gap-4 rounded-2xl border-2 p-4 transition-all duration-200 ${
-                            selected 
-                              ? "border-primary bg-primary-light/20 shadow-soft ring-4 ring-primary/5" 
-                              : "border-border-subtle bg-background/50 hover:border-primary/30 dark:border-border-dark"
-                          }`}
-                        >
-                          <div className={`flex h-6 w-6 items-center justify-center rounded-lg border-2 transition-colors ${selected ? "border-primary bg-primary" : "border-border-subtle bg-white dark:bg-card-dark dark:border-border-dark"}`}>
-                            {selected && <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>}
-                          </div>
-                          <div className="flex flex-col">
-                            <span className={`text-sm font-black tracking-tight ${selected ? "text-primary" : "text-text-primary dark:text-text-primary-dark"}`}>{exam.name}</span>
-                            <span className="text-[10px] font-bold text-text-secondary/60 uppercase">{new Date(exam.startDate).toLocaleDateString()}</span>
-                          </div>
-                          <input
-                            type="checkbox"
-                            className="sr-only"
-                            checked={selected}
-                            onChange={() => {
-                              setPublishValues((current) => {
-                                const next = selected
-                                  ? current.examIds.filter((id) => id !== exam.id)
-                                  : [...current.examIds, exam.id];
-                                return { ...current, examIds: next.slice(0, 3) };
-                              });
-                            }}
-                          />
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
-                {publishFieldErrors.examIds && (
-                  <p className="text-xs font-bold text-error ml-1">{publishFieldErrors.examIds[0]}</p>
-                )}
-              </div>
-              
-              <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between pt-4 border-t border-border-subtle dark:border-border-dark">
-                <div>
-                  {publishMessage && (
-                    <p className={`text-sm font-bold flex items-center gap-2 ${publishMessage.includes("published") ? "text-secondary" : "text-error"}`}>
-                      <span className={`h-2 w-2 rounded-full ${publishMessage.includes("published") ? "bg-secondary" : "bg-error"}`}></span>
-                      {publishMessage}
-                    </p>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() =>
-                      setPublishValues({
-                        termId: "",
-                        classId: "",
-                        examIds: [],
-                      })
-                    }
-                    className="h-12 px-8 font-black uppercase tracking-widest text-xs"
-                  >
-                    Reset Form
-                  </Button>
-                  <PrimaryButton 
-                    type="submit" 
-                    disabled={publishDisabled}
-                    className="h-12 px-10 font-black uppercase tracking-widest text-xs shadow-soft"
-                  >
-                    {isPublishing ? "Processing..." : "Commit Publication"}
-                  </PrimaryButton>
-                </div>
-              </div>
-            </form>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Published Management Section */}
-      <Card className="border-none shadow-soft overflow-hidden">
-        <CardHeader className="bg-background/80 dark:bg-background-dark/80 p-8 border-b border-border-subtle dark:border-border-dark">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-1">
-              <CardTitle className="text-xl">Consolidated Archive</CardTitle>
-              <CardDescription className="text-sm font-medium">History of published report cards and active drafts.</CardDescription>
-            </div>
-            {actionMessage && (
-              <div className="rounded-xl border border-secondary/20 bg-secondary-light/30 px-4 py-2 text-xs font-black text-secondary animate-in fade-in slide-in-from-top-1">
-                {actionMessage}
-              </div>
-            )}
-          </div>
+          <PrimaryButton onClick={() => setIsPublishOpen(true)} className="h-10 px-8 font-bold uppercase text-[10px]">New Publication</PrimaryButton>
         </CardHeader>
         <CardContent className="p-0">
-          {reports.length === 0 ? (
-            <div className="py-24 text-center">
-              <div className="inline-flex h-20 w-20 items-center justify-center rounded-3xl bg-background dark:bg-background-dark border-2 border-dashed border-border-subtle dark:border-border-dark mb-6 text-text-secondary/20">
-                <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
-              </div>
-              <p className="text-sm font-black text-text-secondary/40 uppercase tracking-[0.2em]">No records found</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-border-subtle dark:divide-border-dark">
+          <Table>
+            <TableHeader><TableRow className="bg-background/80">
+              <TableHead className="py-3">Academic Period</TableHead>
+              <TableHead className="py-3">Class Level</TableHead>
+              <TableHead className="py-3">Status</TableHead>
+              <TableHead className="py-3 text-right pr-8">Actions</TableHead>
+            </TableRow></TableHeader>
+            <TableBody>
               {reports.map((report) => (
-                <div key={report.id} className="group transition-all hover:bg-primary-light/5">
-                  <div className="flex flex-col gap-6 p-8 md:flex-row md:items-center md:justify-between">
-                    <div className="flex items-start gap-6">
-                      <div className={`h-14 w-14 shrink-0 flex items-center justify-center rounded-2xl border-2 transition-colors ${
-                        report.status === "PUBLISHED" ? "border-secondary/20 bg-secondary-light/20 text-secondary" : "border-accent/20 bg-accent-light/20 text-accent"
-                      }`}>
-                         <span className="text-lg font-black">{report.class.name.charAt(0)}</span>
-                      </div>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-3">
-                          <h4 className="text-lg font-black tracking-tight text-text-primary dark:text-text-primary-dark">
-                            {report.class.name} · {report.term.academicYear.name}
-                          </h4>
-                          <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-widest border ${
-                            report.status === "PUBLISHED" 
-                              ? "bg-secondary-light/50 text-secondary border-secondary/20" 
-                              : "bg-accent-light/50 text-accent border-accent/20"
-                          }`}>
-                            {report.status}
-                          </span>
-                        </div>
-                        <p className="text-xs font-bold text-text-secondary/80">
-                          Period: {report.term.name} • Assessment: {report.exams.map((item) => item.exam.name).join(" + ") || "None"}
-                        </p>
-                        <div className="flex items-center gap-4 pt-1">
-                          {report.publishedAt && (
-                            <span className="text-[10px] font-bold uppercase text-text-secondary/60">Published: {new Date(report.publishedAt).toLocaleDateString()}</span>
-                          )}
-                          {report.reopenedAt && (
-                            <span className="text-[10px] font-bold uppercase text-accent">Modified: {new Date(report.reopenedAt).toLocaleDateString()}</span>
-                          )}
-                        </div>
-                      </div>
+                <TableRow key={report.id} className="group hover:bg-primary-light/5 transition-colors">
+                  <TableCell className="py-2">
+                    <p className="text-[13px] font-black text-text-primary uppercase">{report.term.academicYear.name} · {report.term.name}</p>
+                    <span className="text-[9px] font-bold text-text-secondary/40">{report.exams.map(e => e.exam.name).join(' + ')}</span>
+                  </TableCell>
+                  <TableCell className="py-2 text-[11px] font-black text-primary uppercase">{report.class.name}</TableCell>
+                  <TableCell className="py-2">
+                    <span className={`inline-flex rounded-lg px-2 py-0.5 text-[9px] font-black uppercase tracking-widest ${report.status === 'PUBLISHED' ? 'bg-secondary-light/50 text-secondary border border-secondary/20' : 'bg-accent-light/50 text-accent border border-accent/20'}`}>
+                      {report.status}
+                    </span>
+                  </TableCell>
+                  <TableCell className="py-2 pr-8 text-right">
+                    <div className="flex justify-end gap-2">
+                      <Button onClick={() => { setActiveReportId(report.id); setIsRemarksOpen(true); }} variant="outline" className="h-8 px-3 text-[10px] font-black uppercase tracking-widest">Remarks</Button>
+                      <ButtonLink href={`/api/reports?reportId=${report.id}&format=pdf`} variant="outline" className="h-8 px-3 text-[10px] font-black uppercase border-secondary text-secondary hover:bg-secondary-light/20">Print</ButtonLink>
                     </div>
-                    
-                    <div className="flex flex-wrap items-center gap-3">
-                      <ButtonLink 
-                        href={pdfLink(report)} 
-                        variant="outline"
-                        className="h-10 px-5 font-bold text-xs uppercase tracking-wider border-secondary text-secondary hover:bg-secondary-light/20"
-                      >
-                        Print PDF
-                      </ButtonLink>
-                      
-                      {report.status === "PUBLISHED" && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => void handleReopen(report.id)}
-                          className="h-10 px-5 font-bold text-xs uppercase tracking-wider border-accent text-accent hover:bg-accent-light/20"
-                        >
-                          Revise
-                        </Button>
-                      )}
-                      
-                      <PrimaryButton
-                        type="button"
-                        onClick={() => {
-                          setExpandedReportId((current) => (current === report.id ? null : report.id));
-                          setActionMessage(null);
-                        }}
-                        className={`h-10 px-5 font-bold text-xs uppercase tracking-wider shadow-soft ${expandedReportId === report.id ? "bg-text-primary dark:bg-background-dark" : ""}`}
-                      >
-                        {expandedReportId === report.id ? "Close Remarks" : "Manage Remarks"}
-                      </PrimaryButton>
-                    </div>
-                  </div>
-
-                  {expandedReportId === report.id && (
-                    <div className="bg-background/40 dark:bg-background-dark/20 border-t border-border-subtle dark:border-border-dark animate-in slide-in-from-top-2 duration-300">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-background/80 dark:bg-background-dark/80">
-                            <TableHead className="py-4">Student Profile</TableHead>
-                            <TableHead className="w-1/2 py-4">Educational Remarks</TableHead>
-                            <TableHead className="py-4">Endorsement</TableHead>
-                            <TableHead className="text-right py-4 pr-8">Control</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {report.remarks.map((remark) => {
-                            const key = `${report.id}:${remark.studentId}`;
-                            const draft = remarkDrafts[key] ?? {
-                              remark: remark.remark,
-                              classTeacherName: remark.classTeacherName ?? "",
-                            };
-                            const normalizedDraft = {
-                              remark: draft.remark,
-                              classTeacherName: draft.classTeacherName?.trim() ? draft.classTeacherName : undefined,
-                            };
-                            const rowValidation = remarkDraftSchema.safeParse(normalizedDraft);
-                            return (
-                              <TableRow key={remark.id} className="hover:bg-white dark:hover:bg-card-dark transition-colors">
-                                <TableCell className="py-6 align-top">
-                                  <div className="flex flex-col gap-1">
-                                    <span className="font-extrabold text-text-primary dark:text-text-primary-dark">{remark.student.firstName} {remark.student.lastName}</span>
-                                    <span className="inline-flex w-fit rounded-lg bg-background dark:bg-background-dark px-2 py-0.5 text-[10px] font-black uppercase text-text-secondary border border-border-subtle dark:border-border-dark tracking-tighter">
-                                      {remark.student.admissionNumber}
-                                    </span>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="py-6">
-                                  <div className="space-y-2">
-                                    <textarea
-                                      className="min-h-[100px] w-full rounded-2xl border border-border-subtle bg-background px-4 py-3 text-sm font-medium text-text-primary outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 dark:border-border-dark dark:bg-background-dark"
-                                      value={draft.remark}
-                                      placeholder="Professional observation of student performance..."
-                                      onChange={(event) =>
-                                        setRemarkDrafts((current) => ({
-                                          ...current,
-                                          [key]: { ...(current[key] ?? {}), remark: event.target.value },
-                                        }))
-                                      }
-                                    />
-                                    {remarkErrors[key] && (
-                                      <p className="text-[10px] font-black uppercase text-error tracking-widest">{remarkErrors[key]}</p>
-                                    )}
-                                  </div>
-                                </TableCell>
-                                <TableCell className="py-6 align-top">
-                                  <Input
-                                    value={draft.classTeacherName ?? ""}
-                                    placeholder="Teacher Endorsement"
-                                    className="h-10 font-bold text-xs"
-                                    onChange={(event) =>
-                                      setRemarkDrafts((current) => ({
-                                        ...current,
-                                        [key]: { ...(current[key] ?? {}), classTeacherName: event.target.value },
-                                      }))
-                                    }
-                                  />
-                                </TableCell>
-                                <TableCell className="text-right py-6 pr-8 align-top">
-                                  <Button
-                                    type="button"
-                                    variant="primary"
-                                    className="h-10 px-6 font-black uppercase tracking-widest text-[10px]"
-                                    onClick={() => void handleRemarkSave(report.id, remark.studentId)}
-                                    disabled={!rowValidation.success}
-                                  >
-                                    Commit
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
-                </div>
+                  </TableCell>
+                </TableRow>
               ))}
-            </div>
-          )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
-      
-      <div className="flex justify-center pb-10">
-        <p className="text-[10px] font-black uppercase tracking-[0.5em] text-text-secondary/30">
-          Institutional Report Management System
-        </p>
-      </div>
+
+      <Dialog isOpen={isPublishOpen} onClose={() => setIsPublishOpen(false)} size="xl" title="Consolidate & Publish Reports">
+        <div className="grid gap-8 lg:grid-cols-2">
+          <div className="space-y-6">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-text-secondary/60">Target Scope</h3>
+            <div className="grid gap-4">
+              <FormField label="Academic Term"><Select value={publishValues.termId} onChange={e => setPublishValues(c => ({...c, termId: e.target.value, examIds: []}))} className="h-11">{termOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</Select></FormField>
+              <FormField label="Target Class"><Select value={publishValues.classId} onChange={e => setPublishValues(c => ({...c, classId: e.target.value}))} className="h-11">{setup.classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></FormField>
+            </div>
+          </div>
+          <div className="space-y-6">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-text-secondary/60">Assessments to Include</h3>
+            <div className="grid gap-2">
+              {examOptions.map(e => (
+                <label key={e.id} className="flex items-center gap-3 p-3 rounded-xl border border-border-subtle hover:bg-slate-50 cursor-pointer transition-colors">
+                  <input type="checkbox" checked={publishValues.examIds.includes(e.id)} onChange={() => setPublishValues(c => {
+                    const next = c.examIds.includes(e.id) ? c.examIds.filter(id => id !== e.id) : [...c.examIds, e.id];
+                    return {...c, examIds: next.slice(0, 3)};
+                  })} className="h-4 w-4 rounded border-border-subtle text-primary" />
+                  <span className="text-[11px] font-black uppercase tracking-tight">{e.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-3 border-t border-border-subtle pt-6 mt-8">
+          <Button type="button" variant="outline" onClick={() => setIsPublishOpen(false)} className="h-11 px-8 font-black uppercase tracking-widest text-[10px]">Cancel</Button>
+          <PrimaryButton onClick={handlePublish} disabled={isPublishing || !publishValues.examIds.length} className="h-11 px-10 font-black uppercase tracking-widest text-[10px] shadow-soft">Commit Publication</PrimaryButton>
+        </div>
+      </Dialog>
+
+      <Dialog isOpen={isRemarksOpen} onClose={() => setIsRemarksOpen(false)} size="full" title={`Student Remarks: ${activeReport?.class.name ?? ''}`}>
+        <div className="max-h-[70vh] overflow-y-auto">
+          <Table>
+            <TableHeader><TableRow className="bg-background/80">
+              <TableHead className="py-3">Student Profile</TableHead>
+              <TableHead className="py-3 w-1/2">Professional Remark</TableHead>
+              <TableHead className="py-3">Endorsement</TableHead>
+              <TableHead className="py-3 text-right pr-8">Actions</TableHead>
+            </TableRow></TableHeader>
+            <TableBody>
+              {activeReport?.remarks.map((r) => {
+                const key = `${activeReport.id}:${r.studentId}`;
+                const draft = remarkDrafts[key] ?? { remark: r.remark, classTeacherName: r.classTeacherName ?? "" };
+                return (
+                  <TableRow key={r.id} className="hover:bg-slate-50 transition-colors">
+                    <TableCell className="py-3">
+                      <p className="text-[12px] font-black text-text-primary">{r.student.firstName} {r.student.lastName}</p>
+                      <span className="text-[9px] font-bold text-text-secondary/40 uppercase tracking-tighter">{r.student.admissionNumber}</span>
+                    </TableCell>
+                    <TableCell className="py-3"><textarea className="w-full rounded-xl border border-border-subtle bg-background px-3 py-2 text-[11px] font-medium outline-none focus:ring-4 focus:ring-primary/5 min-h-[60px]" value={draft.remark} onChange={e => setRemarkDrafts(c => ({...c, [key]: {...draft, remark: e.target.value}}))} /></TableCell>
+                    <TableCell className="py-3"><Input className="h-9 text-[11px] font-bold" value={draft.classTeacherName} onChange={e => setRemarkDrafts(c => ({...c, [key]: {...draft, classTeacherName: e.target.value}}))} /></TableCell>
+                    <TableCell className="py-3 text-right pr-8"><Button onClick={() => handleRemarkSave(activeReport.id, r.studentId)} className="h-8 px-4 text-[9px] font-black uppercase bg-primary text-white">Save</Button></TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+        <div className="flex justify-end pt-6 border-t border-border-subtle mt-4">
+          <Button variant="outline" onClick={() => setIsRemarksOpen(false)} className="h-10 px-8 font-black uppercase text-[10px]">Close Manager</Button>
+        </div>
+      </Dialog>
     </div>
   );
 }

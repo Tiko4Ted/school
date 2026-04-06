@@ -5,9 +5,10 @@ type ButtonLinkProps = {
   href: string;
   children: ReactNode;
   variant?: "default" | "outline" | "primary" | "secondary";
+  className?: string;
 };
 
-export function ButtonLink({ href, children, variant = "default" }: ButtonLinkProps) {
+export function ButtonLink({ href, children, variant = "default", className = "" }: ButtonLinkProps) {
   let variantClassName = "bg-text-primary text-white hover:opacity-90 shadow-soft";
   if (variant === "outline") {
     variantClassName = "border border-border-subtle bg-white text-text-secondary hover:bg-primary-light shadow-soft";
@@ -20,7 +21,7 @@ export function ButtonLink({ href, children, variant = "default" }: ButtonLinkPr
   return (
     <Link
       href={href}
-      className={`inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${variantClassName}`}
+      className={`inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${variantClassName} ${className}`.trim()}
     >
       {children}
     </Link>

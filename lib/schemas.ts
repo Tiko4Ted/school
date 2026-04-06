@@ -21,6 +21,7 @@ export const streamSchema = z.object({
   classId: id,
   name: z.string().trim().min(1),
   isDefault: z.boolean().default(false),
+  teacherId: id.optional(),
 });
 
 export const subjectSchema = z.object({
@@ -91,13 +92,13 @@ export const studentSchema = z.object({
 });
 
 export const bulkStudentRowSchema = z.object({
-  admissionNumber: z.string().trim().min(2),
-  firstName: z.string().trim().min(2),
-  lastName: z.string().trim().min(2),
-  gender: z.union([z.nativeEnum(Gender), z.string().trim().min(1)]),
-  dateOfBirth: z.union([dateString, z.string().trim().min(1)]),
-  classId: id,
-  streamId: id.optional(),
+  admissionNumber: z.string().trim().optional(),
+  firstName: z.string().trim().optional(),
+  lastName: z.string().trim().optional(),
+  gender: z.string().trim().optional(),
+  dateOfBirth: z.union([dateString, z.string().trim().min(1)]).optional(),
+  classId: z.string().trim().optional(),
+  streamId: z.string().trim().optional(),
 });
 
 export const bulkStudentCommitSchema = z.object({
